@@ -1,0 +1,29 @@
+---
+import '../styles/global.css';
+import Navigation from '../components/Navigation.astro';
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+
+const {
+	title = 'grondlaag | planpin',
+	description = 'PlanPin is the future home for pinned PDF plan workflows.',
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="nl">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<meta name="description" content={description} />
+		<title>{title}</title>
+	</head>
+	<body class="site-shell">
+		<Navigation />
+		<slot />
+	</body>
+</html>

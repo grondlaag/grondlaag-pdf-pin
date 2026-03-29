@@ -1,0 +1,22 @@
+{
+  "name": "grondlaag-pdf-pin",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/react": "^4.4.0",
+    "astro": "^6.0.8",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.5.207",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

@@ -1,0 +1,23 @@
+---
+import PlanPinApp from '../components/planpin/PlanPinApp.tsx';
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="grondlaag | planpin app" description="Minimale app-shell voor PlanPin.">
+	<main>
+		<div class="container app-shell">
+			<section class="app-hero">
+				<p class="app-hero__eyebrow">planpin / app-shell</p>
+				<h1>plan pin app</h1>
+				<p class="app-hero__text">
+					Deze pagina is klaar voor de React-app en behoudt dezelfde donkere, rustige
+					vormgeving als de bestaande Grondlaag-site.
+				</p>
+			</section>
+
+			<section class="app-panel">
+				<PlanPinApp client:load />
+			</section>
+		</div>
+	</main>
+</Layout>
