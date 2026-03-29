@@ -1,0 +1,17 @@
+---
+const redirectTarget = `${Astro.site?.pathname ?? '/grondlaag-pdf-pin/'}app`;
+---
+
+<html lang="nl-BE">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta http-equiv="refresh" content={`0;url=${redirectTarget}`} />
+		<title>PlanPin</title>
+	</head>
+	<body>
+		<p>
+			Je wordt doorgestuurd naar <a href={redirectTarget}>de PlanPin-app</a>.
+		</p>
+	</body>
+</html>
