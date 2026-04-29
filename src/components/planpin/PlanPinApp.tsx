@@ -61,6 +61,40 @@ type MarkerFocusRequest = {
 	targetZoom: number;
 	centerPoint: { x: number; y: number };
 };
+type IconName =
+	| 'upload'
+	| 'download'
+	| 'chevronLeft'
+	| 'chevronRight'
+	| 'zoomIn'
+	| 'zoomOut'
+	| 'fitWidth'
+	| 'fitHeight'
+	| 'fitPage'
+	| 'reset'
+	| 'status';
+
+const ICON_PATHS: Record<IconName, string> = {
+	upload: 'M12 3v11m0-11 4 4m-4-4-4 4M5 15v4h14v-4',
+	download: 'M12 3v11m0 0 4-4m-4 4-4-4M5 15v4h14v-4',
+	chevronLeft: 'M15 6l-6 6 6 6',
+	chevronRight: 'M9 6l6 6-6 6',
+	zoomIn: 'M10.5 17a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13zM15 15l5 5M10.5 8v5M8 10.5h5',
+	zoomOut: 'M10.5 17a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13zM15 15l5 5M8 10.5h5',
+	fitWidth: 'M4 8h16M4 16h16M7 5 4 8l3 3M17 5l3 3-3 3M7 13l-3 3 3 3M17 13l3 3-3 3',
+	fitHeight: 'M8 4v16M16 4v16M5 7l3-3 3 3M5 17l3 3 3-3M13 7l3-3 3 3M13 17l3 3 3-3',
+	fitPage: 'M7 3h10v18H7zM10 7h4M10 11h4M10 15h4',
+	reset: 'M4 12a8 8 0 1 0 2.3-5.7M4 4v6h6',
+	status: 'M4 7h10M4 17h10M17 7h3M17 17h3M14 7a2 2 0 1 1 4 0 2 2 0 0 1-4 0zM14 17a2 2 0 1 1 4 0 2 2 0 0 1-4 0z',
+};
+
+function Icon({ name }: { name: IconName }) {
+	return (
+		<svg className="planpin-app__icon" viewBox="0 0 24 24" aria-hidden="true">
+			<path d={ICON_PATHS[name]} />
+		</svg>
+	);
+}
 
 function clampZoom(value: number): number {
 	return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
@@ -1023,10 +1057,16 @@ export default function PlanPinApp() {
 	return (
 		<div className="planpin-app">
 			<div className="planpin-app__topbar">
-				<div className="planpin-app__status">{statusLabel}</div>
+				<div className="planpin-app__meta">
+					<p className="planpin-app__label">document</p>
+					<p className="planpin-app__filename" title={loadedPdf?.fileName ?? 'nog geen pdf geselecteerd'}>
+						{loadedPdf?.fileName ?? 'nog geen pdf geselecteerd'}
+					</p>
+				</div>
 				<div className="planpin-app__topbar-actions">
 					<label className="planpin-app__upload" htmlFor={inputId}>
-						<span>pdf uploaden</span>
+						<Icon name="upload" />
+						<span>openen</span>
 						<input
 							id={inputId}
 							className="planpin-app__input"
@@ -1042,7 +1082,8 @@ export default function PlanPinApp() {
 							onClick={handleExportCsv}
 							disabled={!loadedPdf || isExportingCsv}
 						>
-							{isExportingCsv ? 'csv exporteren' : 'exporteer csv'}
+							<Icon name="download" />
+							<span>{isExportingCsv ? 'csv exporteren' : 'csv'}</span>
 						</button>
 						<button
 							type="button"
@@ -1050,94 +1091,103 @@ export default function PlanPinApp() {
 							onClick={handleExportPdf}
 							disabled={!loadedPdf || isExportingPdf}
 						>
-							{isExportingPdf ? 'pdf exporteren' : 'exporteer pdf'}
+							<Icon name="download" />
+							<span>{isExportingPdf ? 'pdf exporteren' : 'exporteren'}</span>
 						</button>
 					</div>
 				</div>
 			</div>
 
 			<div className="planpin-app__toolbar">
-				<div className="planpin-app__meta">
-					<p className="planpin-app__label">document</p>
-					<p className="planpin-app__filename" title={loadedPdf?.fileName ?? 'Nog geen PDF geselecteerd.'}>
-						{loadedPdf?.fileName ?? 'Nog geen PDF geselecteerd.'}
-					</p>
-				</div>
 				<div className="planpin-app__controls" aria-label="pdf bediening">
 					<div className="planpin-app__control-group">
 						<button
 							type="button"
-							className="planpin-app__button planpin-app__button--secondary"
+							className="planpin-app__icon-button"
 							onClick={() => setCurrentPage((value) => Math.max(1, value - 1))}
 							disabled={!loadedPdf || currentPage <= 1 || isRenderingPage}
+							aria-label="vorige pagina"
+							title="vorige"
 						>
-							vorige
+							<Icon name="chevronLeft" />
 						</button>
 						<p className="planpin-app__counter">
 							pagina {totalPages ? currentPage : 0} / {totalPages}
 						</p>
 						<button
 							type="button"
-							className="planpin-app__button planpin-app__button--secondary"
+							className="planpin-app__icon-button"
 							onClick={() => setCurrentPage((value) => Math.min(totalPages, value + 1))}
 							disabled={!loadedPdf || currentPage >= totalPages || isRenderingPage}
+							aria-label="volgende pagina"
+							title="volgende"
 						>
-							volgende
+							<Icon name="chevronRight" />
 						</button>
 					</div>
 					<div className="planpin-app__control-group">
 						<button
 							type="button"
-							className="planpin-app__button planpin-app__button--secondary"
+							className="planpin-app__icon-button"
 							onClick={() => {
 								setManualZoom(zoom - ZOOM_STEP);
 							}}
 							disabled={!loadedPdf || zoom <= MIN_ZOOM || isRenderingPage}
+							aria-label="uitzoomen"
+							title="uitzoomen"
 						>
-							-
+							<Icon name="zoomOut" />
 						</button>
 						<p className="planpin-app__counter">{Math.round(zoom * 100)}%</p>
 						<button
 							type="button"
-							className="planpin-app__button planpin-app__button--secondary"
+							className="planpin-app__icon-button"
 							onClick={() => {
 								setManualZoom(zoom + ZOOM_STEP);
 							}}
 							disabled={!loadedPdf || zoom >= MAX_ZOOM || isRenderingPage}
+							aria-label="inzoomen"
+							title="inzoomen"
 						>
-							+
+							<Icon name="zoomIn" />
 						</button>
 					</div>
 					<div className="planpin-app__control-group planpin-app__control-group--modes">
 						<button
 							type="button"
-							className={`planpin-app__button planpin-app__button--secondary${fitMode === 'width' ? ' is-active' : ''}`}
+							className={`planpin-app__icon-button${fitMode === 'width' ? ' is-active' : ''}`}
 							onClick={() => {
 								void applyFitMode('width');
 							}}
 							disabled={!loadedPdf || isRenderingPage}
+							aria-label="pas breedte"
+							title="pas breedte"
 						>
-							pas breedte
+							<Icon name="fitWidth" />
 						</button>
 						<button
 							type="button"
-							className={`planpin-app__button planpin-app__button--secondary${fitMode === 'height' ? ' is-active' : ''}`}
+							className={`planpin-app__icon-button${fitMode === 'height' ? ' is-active' : ''}`}
 							onClick={() => {
 								void applyFitMode('height');
 							}}
 							disabled={!loadedPdf || isRenderingPage}
+							aria-label="pas hoogte"
+							title="pas hoogte"
 						>
-							pas hoogte
+							<Icon name="fitHeight" />
 						</button>
 						<button
 							type="button"
-							className={`planpin-app__button planpin-app__button--secondary${fitMode === 'page' ? ' is-active' : ''}`}
+							className={`planpin-app__icon-button${fitMode === 'page' ? ' is-active' : ''}`}
 							onClick={() => {
 								void applyFitMode('page');
 							}}
 							disabled={!loadedPdf || isRenderingPage}
+							aria-label="pas pagina"
+							title="pas pagina"
 						>
-							pas pagina
+							<Icon name="fitPage" />
 						</button>
 						<button
 							type="button"
@@ -1152,11 +1202,13 @@ export default function PlanPinApp() {
 						</button>
 						<button
 							type="button"
-							className="planpin-app__button planpin-app__button--secondary"
+							className="planpin-app__icon-button"
 							onClick={resetView}
 							disabled={!loadedPdf || isRenderingPage}
+							aria-label="reset zicht"
+							title="reset zicht"
 						>
-							reset zicht
+							<Icon name="reset" />
 						</button>
 					</div>
 				</div>
@@ -1234,12 +1286,8 @@ export default function PlanPinApp() {
 						</div>
 					) : (
 						<div className="planpin-app__empty">
-							<h2>upload een plan om te starten</h2>
-							<p>
-								Deze eerste MVP toont een PDF in de browser, laat je tussen pagina’s
-								navigeren, in- en uitzoomen, en klikken op de overlaylaag waar markeringen
-								worden geplaatst.
-							</p>
+							<h2>open een plan</h2>
+							<p>kies een pdf-plan en plaats daarna pins op het tekenblad.</p>
 						</div>
 					)}
 				</div>
@@ -1268,7 +1316,7 @@ export default function PlanPinApp() {
 					<div className="planpin-app__panel">
 						<div className="planpin-app__panel-header">
 							<p className="planpin-app__label">documentinfo</p>
-							<p className="planpin-app__coords">{loadedPdf ? `${totalPages} pagina’s` : 'geen pdf'}</p>
+							<p className="planpin-app__coords">{loadedPdf ? `${totalPages} pagina's` : 'geen pdf'}</p>
 						</div>
 						<p className="planpin-app__coords">
 							totaal markeringen: {markers.length} / markeringen op pagina: {visibleMarkers.length}
@@ -1348,6 +1396,23 @@ export default function PlanPinApp() {
 					}}
 				/>
 			) : null}
+			<div className="planpin-app__statusbar">
+				<span>
+					<Icon name="status" /> {statusLabel}
+				</span>
+				<span>{loadedPdf ? `pagina ${currentPage}/${totalPages}` : 'geen document'}</span>
+				<span>{markers.length} opmerkingen</span>
+				<span>
+					autosave{' '}
+					{autosaveStatus === 'idle'
+						? 'inactief'
+						: autosaveStatus === 'saving'
+							? 'bezig'
+							: autosaveStatus === 'saved'
+								? 'bewaard'
+								: 'fout'}
+				</span>
+			</div>
 		</div>
 	);
 }

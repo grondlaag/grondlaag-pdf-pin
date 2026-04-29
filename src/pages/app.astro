@@ -4,19 +4,7 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="grondlaag | planpin app" description="Minimale app-shell voor PlanPin.">
-	<main>
-		<div class="container app-shell">
-			<section class="app-hero">
-				<p class="app-hero__eyebrow">planpin / app-shell</p>
-				<h1>plan pin</h1>
-				<p class="app-hero__text">
-					browsertool om opmerkingen rechtstreeks op een pdf-plan te plaatsen, te beheren en te exporteren.
-				</p>
-			</section>
-
-			<section class="app-panel">
-				<PlanPinApp client:load />
-			</section>
-		</div>
+	<main class="planpin-page">
+		<PlanPinApp client:load />
 	</main>
 </Layout>

@@ -1,36 +1,27 @@
 ---
-const baseUrl = import.meta.env.BASE_URL;
-const links = [{ href: `${baseUrl}app`, label: 'app' }];
-const currentPath = Astro.url.pathname.replace(/\/$/, '') || '/';
-
-const isLinkActive = (href: string) => {
-	const normalizedHref = href.replace(/\/$/, '') || '/';
-
-	return currentPath === normalizedHref || currentPath.startsWith(`${normalizedHref}/`);
-};
+const grondlaagBaseUrl = 'https://grondlaag.github.io/grondlaag';
+const links = [
+	{ href: `${grondlaagBaseUrl}/`, label: 'home' },
+	{ href: `${grondlaagBaseUrl}/advies`, label: 'advies' },
+	{ href: `${grondlaagBaseUrl}/opleidingen`, label: 'opleidingen' },
+	{ href: `${grondlaagBaseUrl}/alaambak`, label: 'alaambak' },
+	{ href: `${grondlaagBaseUrl}/inzichten`, label: 'notities' },
+];
 ---
 
 <header class="site-nav">
 	<div class="container site-nav__inner">
-		<a class="site-nav__brand" href={`${baseUrl}app`}>grondlaag / planpin</a>
+		<a class="site-nav__brand" href={`${grondlaagBaseUrl}/`}>grondlaag</a>
 		<nav aria-label="hoofdnavigatie">
 			<ul class="site-nav__list">
 				{
-					links.map((link) => {
-						const isActive = isLinkActive(link.href);
-
-						return (
-							<li>
-								<a
-									class:list={['site-nav__link', { 'is-active': isActive }]}
-									href={link.href}
-									aria-current={isActive ? 'page' : undefined}
-								>
-									{link.label}
-								</a>
-							</li>
-						);
-					})
+					links.map((link) => (
+						<li>
+							<a class="site-nav__link" href={link.href}>
+								{link.label}
+							</a>
+						</li>
+					))
 				}
 			</ul>
 		</nav>

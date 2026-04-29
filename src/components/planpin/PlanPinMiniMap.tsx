@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import type { IssueMarker } from './types';
 
 interface PlanPinMiniMapProps {
@@ -23,6 +23,75 @@ export default function PlanPinMiniMap({
 	onNavigate,
 }: PlanPinMiniMapProps) {
 	const [isCollapsed, setIsCollapsed] = useState(false);
+	const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
+	const [isDragging, setIsDragging] = useState(false);
+	const dragStateRef = useRef<{
+		pointerId: number;
+		startClientX: number;
+		startClientY: number;
+		startOffsetX: number;
+		startOffsetY: number;
+	} | null>(null);
+
+	useEffect(() => {
+		if (!isDragging) {
+			return;
+		}
+
+		function handlePointerMove(event: globalThis.PointerEvent) {
+			const dragState = dragStateRef.current;
+
+			if (!dragState || event.pointerId !== dragState.pointerId) {
+				return;
+			}
+
+			setPanelOffset({
+				x: dragState.startOffsetX + event.clientX - dragState.startClientX,
+				y: dragState.startOffsetY + event.clientY - dragState.startClientY,
+			});
+		}
+
+		function handlePointerUp(event: globalThis.PointerEvent) {
+			const dragState = dragStateRef.current;
+
+			if (!dragState || event.pointerId !== dragState.pointerId) {
+				return;
+			}
+
+			dragStateRef.current = null;
+			setIsDragging(false);
+		}
+
+		window.addEventListener('pointermove', handlePointerMove);
+		window.addEventListener('pointerup', handlePointerUp);
+		window.addEventListener('pointercancel', handlePointerUp);
+
+		return () => {
+			window.removeEventListener('pointermove', handlePointerMove);
+			window.removeEventListener('pointerup', handlePointerUp);
+			window.removeEventListener('pointercancel', handlePointerUp);
+		};
+	}, [isDragging]);
+
+	function startDrag(event: PointerEvent<HTMLDivElement>) {
+		if (event.button !== 0) {
+			return;
+		}
+
+		event.preventDefault();
+		dragStateRef.current = {
+			pointerId: event.pointerId,
+			startClientX: event.clientX,
+			startClientY: event.clientY,
+			startOffsetX: panelOffset.x,
+			startOffsetY: panelOffset.y,
+		};
+		setIsDragging(true);
+	}
+
+	const floatingStyle = {
+		transform: `translate(${panelOffset.x}px, ${panelOffset.y}px)`,
+	};
 
 	if (
 		!renderSize ||
@@ -45,6 +114,7 @@ export default function PlanPinMiniMap({
 			<button
 				type="button"
 				className="planpin-app__minimap-toggle"
+				style={floatingStyle}
 				onClick={() => setIsCollapsed(false)}
 			>
 				overzicht
@@ -53,14 +123,21 @@ export default function PlanPinMiniMap({
 	}
 
 	return (
-		<div className="planpin-app__minimap">
-			<div className="planpin-app__minimap-header">
+		<div
+			className={`planpin-app__minimap${isDragging ? ' is-dragging' : ''}`}
+			style={floatingStyle}
+		>
+			<div
+				className="planpin-app__minimap-header"
+				onPointerDown={startDrag}
+				title="klik en sleep om te verplaatsen"
+			>
 				<p className="planpin-app__label">overzicht</p>
 				<div className="planpin-app__minimap-actions">
-					<p className="planpin-app__coords">klik om te verschuiven</p>
 					<button
 						type="button"
 						className="planpin-app__button planpin-app__button--secondary planpin-app__minimap-collapse"
+						onPointerDown={(event) => event.stopPropagation()}
 						onClick={() => setIsCollapsed(true)}
 					>
 						verberg
