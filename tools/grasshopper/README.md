@@ -1,4 +1,4 @@
-# Grondlaag / PlanPin Grasshopper PDF exporter (prototype v0.3)
+# Grondlaag / PlanPin Grasshopper PDF exporter (prototype v0.4)
 
 Een Python 3-script voor **Rhino 8 + Grasshopper** dat meerdere Rhino-XY-rechthoeken omzet naar pagina's van **één PDF** en opmerkingen met **PlanPin-manifest v1** insluit. Gegevens blijven bewerkbaar via de huidige PlanPin-webapplicatie na het openen van de PDF.
 
@@ -18,7 +18,8 @@ Een Python 3-script voor **Rhino 8 + Grasshopper** dat meerdere Rhino-XY-rechtho
 |---|---|---|---|---|
 | `PdfBoundaries` | Curve | List | Ja | Gesloten, XY, niet-geroteerde rechthoeken; **lijstvolgorde = PDF-paginavolgorde** |
 | `RemarkRectangles` | Curve | List | Ja | Gesloten vlakke XY-curve; rotatie en kleine vormafwijkingen zijn toegestaan; kan leeg zijn |
-| `Title` | Text | List | Nee | Titel per opmerking; wanneer losgekoppeld automatisch genummerd |
+| `Title` | Text | List | Nee | Beschrijvende titel. Een uitsluitend numerieke titel wordt automatisch als opmerkingsnummer herkend. |
+| `RemarkNumber` | Text / Integer | List | Nee | **Zichtbaar nummer** (bv. `3`, `03`, `41`). Indien leeg blijft de bestaande automatische volgnummering werken. |
 | `Comment` | Text | List | Nee | Beschrijving per opmerking |
 | `Category` | Text | List | Nee | `design`, `technical`, `site`, `coordination`, `safety`, `other` of Nederlandse labels |
 | `Status` | Text | List | Nee | `open`, `in progress`, `resolved` of Nederlandse labels |
@@ -34,6 +35,17 @@ Een Python 3-script voor **Rhino 8 + Grasshopper** dat meerdere Rhino-XY-rechtho
 | `Export` | Boolean | Item | Ja | Button |
 
 **Metadata-lijsten:** ofwel volledig niet aangesloten, ofwel exact even lang als `RemarkRectangles`, in overeenkomende volgorde.
+
+### Zichtbaar nummer versus technische ID (v0.4)
+
+- `RemarkNumber` = zichtbaar nummer op de opmerkingenpagina, in de overzichtslijst en op de marker. **Dit is niet de UUID**.
+- `Title` = omschrijving zoals `wand verwijderen metselwerk`, onafhankelijk van het nummer.
+- `RemarkIds` = optionele **technische UUID** die identiteitsverlies voorkomt wanneer de Grasshopper-lijst opnieuw gesorteerd wordt.
+- `issueNumber` in het PlanPin-manifest blijft het oorspronkelijke **1-based volgnummer** van de lijst; het optionele veld `remarkNumber` bewaart de ingestelde, zichtbare nummering. `issuePageNumber` blijft het echte paginanummer in de uiteindelijke PDF.
+- Voor bestaande Grasshopper-definities waarin `Title = 3` staat, neemt de exporter deze waarde automatisch over als zichtbaar opmerkingsnummer, zonder dat je direct een extra input moet verbinden. Bij voorkeur voortaan `RemarkNumber = 3`, `Title = wand verwijderen metselwerk` gebruiken.
+- `RemarkNumber` accepteert **1 tot 8 cijfers** en behoudt leidende nullen (`03`). Grasshopper-nummers zoals `3.0` worden `3`.
+- De bijbehorende PlanPin-webapp is ook aangepast op branch `feature/grasshopper-planpin-numbering-v04`, zodat dit optionele veld bij import, bewerking en herexport intact blijft. **De live webpagina moet die branch eerst deployen**; in de oude versie zal de zichtbare nummering na herexport alsnog automatisch opnieuw worden bepaald.
+
 
 ## Outputs
 
@@ -70,7 +82,7 @@ PlanPin leest de `planpin-manifest.json`-bijlage, laadt `planpin-source.pdf` in 
 - Wanneer je een opmerking later *verplaatst* in PlanPin, blijft de oorspronkelijke snapshot een afbeelding van de eerdere planzone. Die wordt pas vernieuwd bij een nieuwe Grasshopper-export; de huidige webapp bewaart immers geen rechthoekgeometrie.
 
 
-## Grenzen van prototype v0.3
+## Grenzen van prototype v0.4
 
 - Geen live cloud-synchronisatie. Bewerkingen in PlanPin worden meegenomen bij de **webexport** naar een nieuwe PDF; een nieuwe Grasshopper-export zal die webwijzigingen niet automatisch terug in Rhino opnemen.
 - `RemarkIds` is nodig als de **lijstvolgorde** wijzigt; zonder deze input worden UUID's deterministisch van outputbestandslocatie en lijstindex afgeleid.
@@ -96,3 +108,11 @@ PlanPin leest de `planpin-manifest.json`-bijlage, laadt `planpin-source.pdf` in 
 - Vectorafbeelding van het gekozen planfragment plus PNG-bijlage die PlanPin bij herexport bewaart.
 - Unieke/stabiele snapshot-identificaties per opmerking (geen dubbele afbeeldingen bij herexport).
 - Dynamische paginaopmaak: bij eigen afbeeldingen blijven commentaar, planfragment en bijlagen zichtbaar.
+
+## Wijziging v0.4
+
+- `RemarkNumber` (optioneel) als onafhankelijk zichtbaar nummer naast `Title` en `RemarkIds`.
+- Numerieke `Title`-waarden worden compatibiliteitshalve automatisch geïnterpreteerd als `RemarkNumber` indien er geen afzonderlijk nummer is opgegeven.
+- De PDF-overzichtspagina, opmerkingenpagina en marker gebruiken hetzelfde zichtbare nummer.
+- Optioneel `remarkNumber` in het bestaande PlanPin manifest v1; de technische `id` en het lijstvolgnummer `issueNumber` blijven ongewijzigd.
+- De bijbehorende website-aanpassing bewaart dit veld in de browserconcepten en biedt een bewerkbaar veld **nummer**.
