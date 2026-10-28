@@ -34,6 +34,7 @@ export default function PlanPinIssueModal({
 	onDelete,
 }: PlanPinIssueModalProps) {
 	const titleId = useId();
+	const remarkNumberId = useId();
 	const commentId = useId();
 	const categoryId = useId();
 	const statusId = useId();
@@ -108,6 +109,23 @@ export default function PlanPinIssueModal({
 				</div>
 
 				<form className="planpin-modal__form" onSubmit={handleSubmit}>
+					<label className="planpin-modal__field" htmlFor={remarkNumberId}>
+						<span className="planpin-app__label">nummer</span>
+						<input
+							id={remarkNumberId}
+							className="planpin-modal__input"
+							type="text"
+							inputMode="numeric"
+							pattern="[0-9]*"
+							maxLength={8}
+							value={draftValue.remarkNumber ?? ''}
+							onChange={(event) => setDraftValue((currentValue) => ({
+								...currentValue,
+								remarkNumber: event.target.value,
+							}))}
+							placeholder="leeg = automatische volgnummering"
+						/>
+					</label>
 					<label className="planpin-modal__field" htmlFor={titleId}>
 						<span className="planpin-app__label">titel</span>
 						<input
