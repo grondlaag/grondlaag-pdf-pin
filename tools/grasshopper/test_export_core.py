@@ -76,3 +76,53 @@ with tempfile.TemporaryDirectory() as d:
     else:
         raise AssertionError('Expected a ValueError on overlapping/missing boundary')
     print('PASS: 2-page source, 3 issues, full manifest roundtrip, correct page links and safety validation')
+
+
+# Regression: v0.1 incorrectly rejected rotated and slightly irregular remark outlines.
+# These lightweight geometry doubles exercise validation without Rhino installed.
+class _Pt:
+    def __init__(self, x, y, z=0):
+        self.X, self.Y, self.Z = x, y, z
+
+class _BB:
+    def __init__(self, mn, mx):
+        self.Min, self.Max = mn, mx
+
+class _Curve:
+    def __init__(self, mn, mx, length, closed=True):
+        self.bb = _BB(mn, mx)
+        self.length = length
+        self.IsClosed = closed
+
+    def GetBoundingBox(self, accurate):
+        return self.bb
+
+    def GetLength(self):
+        return self.length
+
+# Diamond with bbox dimensions 20 x 20; perimeter 4 * sqrt(200), not 80.
+rotated = _Curve(_Pt(10, 10), _Pt(30, 30), 4 * math.sqrt(200))
+assert ns['_get_box'](rotated, 'RemarkRectangles[50]', 1e-6,
+                      require_axis_aligned=False) == (10.0, 10.0, 30.0, 30.0)
+assert ns['_normalize_point']((0, 0, 100, 100), (10, 10, 30, 30)) == (0.2, 0.8)
+try:
+    ns['_get_box'](rotated, 'PdfBoundaries[0]', 1e-6)
+except ValueError as exc:
+    assert 'axis-aligned' in str(exc)
+else:
+    raise AssertionError('Rotated PDF boundaries must still be rejected')
+
+irregular = _Curve(_Pt(10, 10), _Pt(30, 30), 95)
+assert ns['_get_box'](irregular, 'RemarkRectangles[51]', 1e-6,
+                      require_axis_aligned=False) == (10.0, 10.0, 30.0, 30.0)
+
+open_curve = _Curve(_Pt(10, 10), _Pt(30, 30), 80, closed=False)
+try:
+    ns['_get_box'](open_curve, 'RemarkRectangles[52]', 1e-6,
+                   require_axis_aligned=False)
+except ValueError as exc:
+    assert 'not a closed' in str(exc)
+else:
+    raise AssertionError('Open remark outlines should still be rejected')
+
+print('PASS: rotated/irregular remark outlines accepted; PDF boundaries remain strict')
