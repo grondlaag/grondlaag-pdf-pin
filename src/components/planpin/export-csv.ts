@@ -3,7 +3,7 @@ import {
 	getIssuePriorityLabel,
 	getIssueStatusLabel,
 } from './labels';
-import { getMarkerDisplayTitle, getMarkerIssueNumber } from './markers';
+import { getMarkerDisplayNumber, getMarkerDisplayTitle, getMarkerIssueNumber } from './markers';
 import type { IssueMarker } from './types';
 
 function escapeCsvValue(value: string | number): string {
@@ -42,7 +42,7 @@ export function exportPlanPinCsv({
 		const issueNumber = getMarkerIssueNumber(marker.id, markers);
 
 		return [
-			issueNumber,
+			getMarkerDisplayNumber(marker, issueNumber),
 			getMarkerDisplayTitle(marker, issueNumber),
 			marker.comment,
 			marker.pageNumber,
