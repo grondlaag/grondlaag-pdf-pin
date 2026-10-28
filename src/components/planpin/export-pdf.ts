@@ -21,7 +21,7 @@ import {
 	getIssuePriorityLabel,
 	getIssueStatusLabel,
 } from './labels';
-import { getMarkerDisplayTitle, getMarkerIssueNumber } from './markers';
+import { getMarkerDisplayNumber, getMarkerDisplayTitle, getMarkerIssueNumber } from './markers';
 import type { IssueCategory, IssueMarker, IssueMarkerImage, IssueStatus } from './types';
 
 interface ExportPlanPinPdfOptions {
@@ -269,7 +269,7 @@ function drawOverviewPage({
 	currentY -= 18;
 	for (const marker of markers) {
 		const issueNumber = getMarkerIssueNumber(marker.id, markers);
-		const line = `Opmerking ${issueNumber}  |  pagina ${marker.pageNumber}  |  ${getMarkerDisplayTitle(marker, issueNumber)}  |  ${getIssueCategoryLabel(marker.category)} / ${getIssueStatusLabel(marker.status)}`;
+		const line = `Opmerking ${getMarkerDisplayNumber(marker, issueNumber)}  |  pagina ${marker.pageNumber}  |  ${getMarkerDisplayTitle(marker, issueNumber)}  |  ${getIssueCategoryLabel(marker.category)} / ${getIssueStatusLabel(marker.status)}`;
 
 		page.drawText(line, {
 			x: margin,
@@ -478,7 +478,7 @@ async function drawIssuePage({
 	const comment = marker.comment.trim() || 'Geen commentaar opgegeven.';
 	let currentY = height - margin;
 
-	issuePage.drawText(`Opmerking ${exportNumber}`, {
+	issuePage.drawText(`Opmerking ${getMarkerDisplayNumber(marker, exportNumber)}`, {
 		x: margin,
 		y: currentY,
 		size: 24,
@@ -517,7 +517,7 @@ async function drawIssuePage({
 
 	currentY -= 24;
 	issuePage.drawText(
-		`Planpagina ${marker.pageNumber}  |  ${marker.images.length} afbeelding${marker.images.length === 1 ? '' : 'en'}  |  opmerking ${exportNumber}  |  ${getIssueCategoryLabel(marker.category)} / ${getIssueStatusLabel(marker.status)} / ${getIssuePriorityLabel(marker.priority)}`,
+		`Planpagina ${marker.pageNumber}  |  ${marker.images.length} afbeelding${marker.images.length === 1 ? '' : 'en'}  |  opmerking ${getMarkerDisplayNumber(marker, exportNumber)}  |  ${getIssueCategoryLabel(marker.category)} / ${getIssueStatusLabel(marker.status)} / ${getIssuePriorityLabel(marker.priority)}`,
 		{
 			x: margin,
 			y: currentY,
@@ -652,7 +652,7 @@ function drawPlanMarker({
 	const markerX = marker.x * width;
 	const markerY = height - marker.y * height;
 	const radius = 10;
-	const label = `${target.exportNumber}`;
+	const label = getMarkerDisplayNumber(marker, target.exportNumber);
 	const fillColor = rgb(0.89, 0.39, 0.23);
 
 	page.drawCircle({
