@@ -45,6 +45,8 @@ export interface IssueMarker {
 	x: number;
 	y: number;
 	title: string;
+	/** User-defined visible remark number, independent of UUID and list order. */
+	remarkNumber?: string;
 	comment: string;
 	category: IssueCategory;
 	status: IssueStatus;
@@ -60,6 +62,8 @@ export interface IssueMarkerDraft {
 	x: number;
 	y: number;
 	title: string;
+	/** User-defined visible remark number, independent of UUID and list order. */
+	remarkNumber?: string;
 	comment: string;
 	category: IssueCategory;
 	status: IssueStatus;
@@ -97,6 +101,8 @@ export interface PlanPinManifestIssue {
 	x: number;
 	y: number;
 	title: string;
+	/** User-defined visible remark number, independent of UUID and list order. */
+	remarkNumber?: string;
 	comment: string;
 	category: IssueCategory;
 	status: IssueStatus;
@@ -139,6 +145,8 @@ export interface StoredIssueMarker {
 	x: number;
 	y: number;
 	title: string;
+	/** User-defined visible remark number, independent of UUID and list order. */
+	remarkNumber?: string;
 	comment: string;
 	category: IssueCategory;
 	status: IssueStatus;
