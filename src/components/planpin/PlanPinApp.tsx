@@ -15,6 +15,7 @@ import {
 	createDraftFromMarker,
 	createDraftFromPoint,
 	createMarkerFromDraft,
+	getMarkerDisplayNumber,
 	getMarkerIssueNumber,
 	getNewDraftImages,
 	getRemovedMarkerImages,
@@ -972,7 +973,7 @@ export default function PlanPinApp() {
 	function confirmDeleteMarker(markerId: string) {
 		const marker = markersRef.current.find((currentMarker) => currentMarker.id === markerId);
 		const issueNumber = marker ? getMarkerIssueNumber(marker.id, markersRef.current) : null;
-		const markerLabel = issueNumber ? `opmerking ${issueNumber}` : 'deze opmerking';
+		const markerLabel = marker && issueNumber ? `opmerking ${getMarkerDisplayNumber(marker, issueNumber)}` : 'deze opmerking';
 
 		if (!window.confirm(`Ben je zeker dat je ${markerLabel} wilt verwijderen?`)) {
 			return;
