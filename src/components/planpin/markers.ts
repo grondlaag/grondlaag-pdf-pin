@@ -78,6 +78,7 @@ export function createMarkerFromDraft(draft: IssueMarkerDraft): IssueMarker {
 		x: draft.x,
 		y: draft.y,
 		title: draft.title.trim() || 'opmerking zonder titel',
+		remarkNumber: draft.remarkNumber?.trim() || undefined,
 		comment: draft.comment.trim(),
 		category: draft.category,
 		status: draft.status,
@@ -140,6 +141,10 @@ export function getMarkerShortId(markerId: string): string {
 	return markerId.slice(0, 6);
 }
 
+export function getMarkerDisplayNumber(marker: Pick<IssueMarker, 'remarkNumber'>, issueNumber: number): string {
+	return marker.remarkNumber?.trim() || String(issueNumber);
+}
+
 export function getMarkerIssueNumber(markerId: string, markers: IssueMarker[]): number {
 	return Math.max(
 		1,
@@ -153,10 +158,10 @@ export function isDefaultIssueTitle(title: string): boolean {
 
 export function getMarkerDisplayTitle(marker: IssueMarker, issueNumber: number): string {
 	if (isDefaultIssueTitle(marker.title)) {
-		return `opmerking ${issueNumber}`;
+		return `opmerking ${getMarkerDisplayNumber(marker, issueNumber)}`;
 	}
 
-	return marker.title.trim() || `opmerking ${issueNumber}`;
+	return marker.title.trim() || `opmerking ${getMarkerDisplayNumber(marker, issueNumber)}`;
 }
 
 export function getMarkerCommentPreview(comment: string): string {
