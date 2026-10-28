@@ -1,4 +1,4 @@
-# Grondlaag / PlanPin Grasshopper PDF exporter (prototype v0.1)
+# Grondlaag / PlanPin Grasshopper PDF exporter (prototype v0.2)
 
 Een Python 3-script voor **Rhino 8 + Grasshopper** dat meerdere Rhino-XY-rechthoeken omzet naar pagina's van **één PDF** en opmerkingen met **PlanPin-manifest v1** insluit. Gegevens blijven bewerkbaar via de huidige PlanPin-webapplicatie na het openen van de PDF.
 
@@ -17,7 +17,7 @@ Een Python 3-script voor **Rhino 8 + Grasshopper** dat meerdere Rhino-XY-rechtho
 | Naam | GH Type | Access | Verplicht | Toelichting |
 |---|---|---|---|---|
 | `PdfBoundaries` | Curve | List | Ja | Gesloten, XY, niet-geroteerde rechthoeken; **lijstvolgorde = PDF-paginavolgorde** |
-| `RemarkRectangles` | Curve | List | Ja | Gesloten, XY, niet-geroteerde opmerkingen; kan leeg zijn |
+| `RemarkRectangles` | Curve | List | Ja | Gesloten vlakke XY-curve; rotatie en kleine vormafwijkingen zijn toegestaan; kan leeg zijn |
 | `Title` | Text | List | Nee | Titel per opmerking; wanneer losgekoppeld automatisch genummerd |
 | `Comment` | Text | List | Nee | Beschrijving per opmerking |
 | `Category` | Text | List | Nee | `design`, `technical`, `site`, `coordination`, `safety`, `other` of Nederlandse labels |
@@ -58,15 +58,21 @@ PlanPin leest de `planpin-manifest.json`-bijlage, laadt `planpin-source.pdf` in 
 
 **Let op:** de huidige PlanPin-software bewaart enkel de *positie* (middelpunt van de Rhino-opmerkingrechthoek), **niet** de afmetingen van de rechthoek.
 
-## Grenzen van prototype v0.1
+## Grenzen van prototype v0.2
 
 - Geen live cloud-synchronisatie. Bewerkingen in PlanPin worden meegenomen bij de **webexport** naar een nieuwe PDF; een nieuwe Grasshopper-export zal die webwijzigingen niet automatisch terug in Rhino opnemen.
 - `RemarkIds` is nodig als de **lijstvolgorde** wijzigt; zonder deze input worden UUID's deterministisch van outputbestandslocatie en lijstindex afgeleid.
 - PDF-print volgt de afdrukbare Rhino-geometrie van de Top-viewport. Materiaal-/weergavestijlen en fonts eerst in Rhino controleren.
-- Alleen vlakke, niet-geroteerde XY-rechthoeken; de PDF's kunnen per pagina verschillende afmetingen hebben.
+- `PdfBoundaries` moeten vlakke, niet-geroteerde XY-rechthoeken blijven. Opmerkingcontouren mogen geroteerd of onregelmatig zijn; hun XY-bounding-box-middelpunt bepaalt de markerpositie. De PDF's kunnen per pagina verschillende afmetingen hebben.
 - Aangemaakte PDF's kunnen bestaande bestanden overschrijven na een nieuwe button-puls. Bij een fout blijft de bestaande PDF behouden.
 - Het script is in deze omgeving alleen **zonder Rhino** getest: manifest, paginatoewijzing, PDF-pagina's, PDF-bijlagen en links. Er is nog een lokale Rhino 8-test nodig op de vector-print en GH-componentintegratie.
 
 ## Tests
 
 `python test_export_core.py` voert een pure Python/PyMuPDF-test uit met 2 planpagina's en 3 opmerkingen en controleert het PDF-manifest, linkannotaties en foutcondities. Deze test draait buiten Rhino.
+
+## Wijziging v0.2
+
+- `RemarkRectangles` accepteert voortaan geroteerde of licht onregelmatige **gesloten, vlakke** curves. De markerpositie is het middelpunt van de XY bounding box.
+- De strikte vormcontrole blijft behouden voor `PdfBoundaries`, omdat die de exacte PDF-pagina-uitsnede bepalen.
+- Als een opmerking buiten een pagina valt of meerdere pagina's raakt, blijft de export bewust stoppen met een foutmelding.
