@@ -29,8 +29,13 @@ with tempfile.TemporaryDirectory() as d:
     source_path = os.path.join(d, 'source.pdf')
     final_path = os.path.join(d, 'final.pdf')
     source_pdf = fitz.open()
-    source_pdf.new_page(width=600, height=420)
-    source_pdf.new_page(width=800, height=600)
+    plan_1 = source_pdf.new_page(width=600, height=420)
+    plan_1.draw_rect(fitz.Rect(60, 270, 120, 330), fill=(0.0, 0.0, 0.85))
+    plan_1.draw_rect(fitz.Rect(300, 60, 360, 125), fill=(0.85, 0.0, 0.0))
+    plan_1.insert_text((50, 30), 'PLAN A', fontsize=18)
+    plan_2 = source_pdf.new_page(width=800, height=600)
+    plan_2.draw_rect(fitz.Rect(200, 300, 400, 450), fill=(0.1, 0.65, 0.2))
+    plan_2.insert_text((50, 30), 'PLAN B', fontsize=18)
     source_pdf.save(source_path)
     source_pdf.close()
 
@@ -53,14 +58,49 @@ with tempfile.TemporaryDirectory() as d:
     assert manifest['issues'][1]['priority'] == 'high'
     assert manifest['issues'][2]['issuePageNumber'] == 6
     assert ns['build_manifest_and_assignments'](boxes, remarks, params)[0]['issues'][0]['id'] == manifest['issues'][0]['id']
+    # An existing user image must remain present alongside the automatic screenshot.
+    photo_doc = fitz.open()
+    photo_page = photo_doc.new_page(width=160, height=100)
+    photo_page.draw_rect(fitz.Rect(0, 0, 160, 100), fill=(0.2, 0.65, 0.3))
+    user_photo = photo_page.get_pixmap().tobytes('png')
+    photo_doc.close()
+    photo_id = str(uuid.uuid4())
+    photo_attachment = 'planpin-images/{}-user-image.png'.format(photo_id)
+    manifest['issues'][0]['images'].append(dict(id=photo_id, name='user-image.png',
+        type='image/png', size=len(user_photo), attachmentName=photo_attachment))
+    attachments.append((photo_attachment, 'user-image.png', user_photo))
+    regions = ns['_snapshot_boxes'](boxes, remarks, manifest)
+    assert len(regions) == 3
+    assert all(0 <= v <= 1 for region in regions for v in region)
     logs = []
-    serialized = ns['_render_final_pdf'](source_path, final_path, manifest, attachments, logs)
+    serialized = ns['_render_final_pdf'](source_path, final_path, manifest, attachments,
+                                         logs, regions, 0.30)
     output_pdf = fitz.open(final_path)
     assert output_pdf.page_count == 6
-    assert sorted(output_pdf.embfile_names()) == ['planpin-manifest.json', 'planpin-source.pdf']
+    assert len(output_pdf.embfile_names()) == 6  # Source + manifest + 3 screenshots + user image
     embedded_manifest = json.loads(output_pdf.embfile_get('planpin-manifest.json'))
     assert embedded_manifest == manifest
     assert json.loads(serialized) == manifest
+    assert len(manifest['issues']) == 3
+    for index, issue in enumerate(embedded_manifest['issues']):
+        assert issue['issuePageNumber'] == len(boxes) + index + 2
+        assert len(issue['images']) == (2 if index == 0 else 1)
+        snapshot = issue['images'][0]
+        assert snapshot['type'] == 'image/png'
+        assert snapshot['name'].startswith('planfragment-opmerking-')
+        assert snapshot['attachmentName'] in output_pdf.embfile_names()
+        screenshot = output_pdf.embfile_get(snapshot['attachmentName'])
+        assert screenshot[:8] == b'\x89PNG\r\n\x1a\n'
+        assert snapshot['size'] == len(screenshot)
+        image_document = fitz.open(stream=screenshot, filetype='png')
+        assert image_document.page_count == 1
+        image_document.close()
+        # Each issue page has the vector-plan crop as a reusable PDF XObject.
+        assert len(output_pdf[len(boxes) + index + 1].get_xobjects()) >= 1
+    # Different remark locations produce different PlanPin image attachments.
+    assert output_pdf.embfile_get(embedded_manifest['issues'][0]['images'][0]['attachmentName']) != output_pdf.embfile_get(embedded_manifest['issues'][2]['images'][0]['attachmentName'])
+    assert embedded_manifest['issues'][0]['images'][1]['attachmentName'] == photo_attachment
+    assert output_pdf.embfile_get(photo_attachment) == user_photo
     embedded_pdf = fitz.open(stream=output_pdf.embfile_get('planpin-source.pdf'),filetype='pdf')
     assert embedded_pdf.page_count == 2
     assert len(output_pdf[0].get_links()) >= 1
@@ -75,7 +115,7 @@ with tempfile.TemporaryDirectory() as d:
         assert 'exactly one' in str(exc)
     else:
         raise AssertionError('Expected a ValueError on overlapping/missing boundary')
-    print('PASS: 2-page source, 3 issues, full manifest roundtrip, correct page links and safety validation')
+    print('PASS: 2-page source, 3 vector snapshots + embedded PlanPin images, full manifest roundtrip, links and safety validation')
 
 
 # Regression: v0.1 incorrectly rejected rotated and slightly irregular remark outlines.
