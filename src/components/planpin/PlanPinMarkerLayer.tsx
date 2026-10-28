@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react';
-import { getMarkerDisplayTitle, getNormalizedOverlayPoint } from './markers';
+import { getMarkerDisplayNumber, getMarkerDisplayTitle, getNormalizedOverlayPoint } from './markers';
 import type { IssueMarker, OverlayPoint } from './types';
 
 interface PlanPinMarkerLayerProps {
@@ -49,7 +49,7 @@ export default function PlanPinMarkerLayer({
 							onMarkerSelect(marker.id);
 						}}
 					>
-						<span className="planpin-app__marker-dot">{issueNumber}</span>
+						<span className="planpin-app__marker-dot">{getMarkerDisplayNumber(marker, issueNumber)}</span>
 						<span className="planpin-app__marker-label">{displayTitle}</span>
 					</button>
 				);
