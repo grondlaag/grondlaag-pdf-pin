@@ -1,12 +1,13 @@
 #! python 3
 # requirements: pymupdf
 """
-GRONDLAAG / PlanPin exporter - Rhino 8 / Grasshopper Python 3 (v0.3)
+GRONDLAAG / PlanPin exporter - Rhino 8 / Grasshopper Python 3 (v0.4)
 
 Inputs (rename component inputs EXACTLY as below):
     PdfBoundaries     Curve    List     required; axis-aligned closed XY rectangles
     RemarkRectangles Curve    List     required; closed planar XY outlines (rotation allowed)
-    Title            Text     List     optional; index-aligned with remarks
+    Title            Text     List     optional; description title, index-aligned with remarks
+    RemarkNumber     Text     List     optional; visible remark number (e.g. 03), index-aligned
     Comment          Text     List     optional; index-aligned with remarks
     Category         Text     List     optional; index-aligned with remarks
     Status           Text     List     optional; index-aligned with remarks
@@ -109,6 +110,22 @@ def _choice(values, index, default, field, n, allowed, aliases):
     if normalized not in allowed:
         raise ValueError('{}[{}] = {!r} is not a supported PlanPin value'.format(field, index, raw))
     return normalized
+
+
+def _display_number(issue, index):
+    """Custom PlanPin display number or legacy 1-based issue order."""
+    return str(issue.get('remarkNumber') or (index + 1))
+
+
+def _normalize_remark_number(raw, field):
+    """Keep leading zeros but normalize Grasshopper numeric 3.0 to '3'."""
+    raw = str(raw or '').strip()
+    if not raw:
+        return ''
+    match = re.fullmatch(r'([0-9]+)(?:\.0+)?', raw)
+    if not match or len(match.group(1)) > 8:
+        raise ValueError('{} must contain 1..8 digits'.format(field))
+    return match.group(1)
 
 
 def _get_box(curve, label, tolerance, require_axis_aligned=True):
@@ -347,7 +364,7 @@ def _render_final_pdf(source_file, output_file, manifest, image_contents, messag
         for i, issue in enumerate(manifest['issues'][:27]):
             row_y = 120 + i * 23
             overview.insert_text((48, row_y), '{}.  P{} - {}'.format(
-                i + 1, issue['pageNumber'], issue['title'][:60]), fontsize=10)
+                _display_number(issue, i), issue['pageNumber'], issue['title'][:60]), fontsize=10)
             overview.insert_link({'kind': fitz.LINK_GOTO,
                                   'from': fitz.Rect(45, row_y - 11, 565, row_y + 5),
                                   'page': plan_pages + 1 + i,
@@ -358,8 +375,9 @@ def _render_final_pdf(source_file, output_file, manifest, image_contents, messag
         attachments = list(image_contents)
         for i, issue in enumerate(manifest['issues']):
             page = pdf[plan_pages + 1 + i]
-            page.insert_text((48, 52), 'Opmerking {}'.format(i + 1), fontsize=20, fontname='hebo')
-            _append_text(page, 76, issue['title'], 14)
+            page.insert_text((48, 52), 'Opmerking {}'.format(_display_number(issue, i)), fontsize=20, fontname='hebo')
+            if issue['title'].strip().lower() != 'opmerking {}'.format(_display_number(issue, i)):
+                _append_text(page, 76, issue['title'], 14)
             _append_text(page, 122, 'Planpagina {}  |  {}'.format(issue['pageNumber'], issue['reference']), 11)
             _append_text(page, 150, 'Categorie: {}   Status: {}   Prioriteit: {}'.format(
                 issue['category'], issue['status'], issue['priority']), 10)
@@ -374,7 +392,7 @@ def _render_final_pdf(source_file, output_file, manifest, image_contents, messag
                 selected, clip = _snapshot_clip(source_page, snapshot_regions[i], snapshot_margin)
                 # A real image attachment allows the website to preserve the
                 # snapshot in its existing image workflow after editing/re-export.
-                snapshot_name = 'planfragment-opmerking-{:03d}.png'.format(i + 1)
+                snapshot_name = 'planfragment-opmerking-{:03d}.png'.format(i + 1)  # unique list position
                 attachment = 'planpin-images/{}-{}'.format(snapshot_id, _safe_image_name(snapshot_name))
                 image_bytes = _snapshot_preview_bytes(source_page, clip)
                 issue['images'].insert(0, dict(id=snapshot_id, name=snapshot_name,
@@ -428,7 +446,7 @@ def _render_final_pdf(source_file, output_file, manifest, image_contents, messag
             radius = 10
             page.draw_circle(fitz.Point(x, y), radius, color=(0.35, 0.15, 0.08),
                              fill=(0.89, 0.39, 0.23), width=1.4)
-            num = str(i + 1)
+            num = _display_number(issue, i)
             page.insert_text((x - 3.1 * len(num), y + 3.4), num,
                              fontsize=9, color=(1, 1, 1))
             page.insert_link({'kind': fitz.LINK_GOTO,
@@ -491,7 +509,16 @@ def build_manifest_and_assignments(page_boxes, remark_boxes, params):
             issue_id = str(uuid.uuid5(uuid.NAMESPACE_URL,
                                       'grondlaag:planpin:{}:{}'.format(
                                           os.path.join(output_folder, filename), i)))
-        title = _value(params['Title'], i, 'opmerking {}'.format(i + 1), 'Title', n)
+        title = _value(params['Title'], i, '', 'Title', n)
+        raw_number = _value(params.get('RemarkNumber'), i, '', 'RemarkNumber', n)
+        custom_number = _normalize_remark_number(raw_number, 'RemarkNumber[{}]'.format(i))
+        # Existing GH definitions often put the wanted integer in Title.
+        # Promote numeric-only titles to the visible number when no separate input is wired.
+        if not custom_number and re.fullmatch(r'[0-9]+(?:\.0+)?', title):
+            custom_number = _normalize_remark_number(title, 'Title[{}]'.format(i))
+            title = ''
+        if not title:
+            title = 'opmerking {}'.format(custom_number or i + 1)
         comment = _value(params['Comment'], i, '', 'Comment', n)
         reference = _value(params['Reference'], i, '', 'Reference', n)
         category = _choice(params['Category'], i, 'other', 'Category', n, VALID_CATEGORY, CATEGORY_MAP)
@@ -501,11 +528,11 @@ def build_manifest_and_assignments(page_boxes, remark_boxes, params):
         all_image_contents.extend(contents)
         issues.append(dict(
             id=issue_id, pageNumber=page_index + 1, x=round(x, 9), y=round(y, 9),
-            title=title or 'opmerking zonder titel', comment=comment,
+            title=title, comment=comment,
             category=category, status=status, priority=priority,
             reference=reference, createdAt=now,
             issueNumber=i + 1, issuePageNumber=len(page_boxes) + i + 2,
-            images=images))
+            images=images, **({'remarkNumber': custom_number} if custom_number else {})))
     if len({i['id'] for i in issues}) != len(issues):
         raise ValueError('Duplicate RemarkIds detected')
     manifest = dict(kind='planpin-manifest', version=1, sourceFileName=filename,
@@ -607,7 +634,7 @@ PdfPath, RemarkMap, Manifest, Log = sc.sticky.get(
 if _pressed and not _previous:
     try:
         _inputs = {name: globals().get(name) for name in (
-            'PdfBoundaries', 'RemarkRectangles', 'Title', 'Comment',
+            'PdfBoundaries', 'RemarkRectangles', 'Title', 'RemarkNumber', 'Comment',
             'Category', 'Status', 'Priority', 'Reference', 'Images',
             'RemarkIds', 'OutputFolder', 'FileName', 'Scale', 'Dpi',
             'SnapshotMargin')}
