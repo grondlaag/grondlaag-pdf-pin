@@ -4,7 +4,7 @@ import {
 	getIssuePriorityLabel,
 	getIssueStatusLabel,
 } from './labels';
-import { getMarkerCommentPreview, getMarkerDisplayTitle } from './markers';
+import { getMarkerCommentPreview, getMarkerDisplayNumber, getMarkerDisplayTitle } from './markers';
 import {
 	ISSUE_CATEGORY_OPTIONS,
 	ISSUE_STATUS_OPTIONS,
@@ -205,7 +205,7 @@ export default function PlanPinIssueList({
 								onClick={() => onIssueOpen(marker.id)}
 							>
 								<div className="planpin-app__issue-row">
-									<p className="planpin-app__issue-id">opmerking {issueNumber}</p>
+									<p className="planpin-app__issue-id">opmerking {getMarkerDisplayNumber(marker, issueNumber)}</p>
 									<p className="planpin-app__issue-page">pagina {marker.pageNumber}</p>
 								</div>
 								<h3 className="planpin-app__issue-title">{displayTitle}</h3>
