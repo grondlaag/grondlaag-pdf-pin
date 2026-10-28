@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory() as d:
     source_pdf.close()
 
     params = dict(OutputFolder=d, FileName='sample.pdf', tolerance=0.00001,
-                  RemarkIds=[], Title=['A', 'B', 'C'],
+                  RemarkIds=[], Title=['A', 'B', 'C'], RemarkNumber=['3', '41', '102'],
                   Comment=['door 01', 'Check wall', 'Long description'],
                   Reference=['room 1','room 2','room 3'],
                   Category=['technical', 'ontwerp', 'other'],
@@ -52,12 +52,23 @@ with tempfile.TemporaryDirectory() as d:
     assert assigned == [[0, 2], [1]]
     assert manifest['issues'][0]['x'] == 0.15
     assert math.isclose(manifest['issues'][0]['y'], 1 - 20 / 70, abs_tol=1e-8)
+    assert [issue['remarkNumber'] for issue in manifest['issues']] == ['3', '41', '102']
+    assert [issue['issueNumber'] for issue in manifest['issues']] == [1, 2, 3]
     assert manifest['issues'][1]['pageNumber'] == 2
     assert manifest['issues'][1]['category'] == 'design'
     assert manifest['issues'][1]['status'] == 'in progress'
     assert manifest['issues'][1]['priority'] == 'high'
     assert manifest['issues'][2]['issuePageNumber'] == 6
     assert ns['build_manifest_and_assignments'](boxes, remarks, params)[0]['issues'][0]['id'] == manifest['issues'][0]['id']
+    # Backward compatibility: a numeric-only Title becomes the visible number.
+    legacy_params = dict(params, RemarkNumber=[], Title=['3', '04', '12'])
+    legacy_manifest = ns['build_manifest_and_assignments'](boxes, remarks, legacy_params)[0]
+    assert [v['remarkNumber'] for v in legacy_manifest['issues']] == ['3', '04', '12']
+    assert legacy_manifest['issues'][0]['title'] == 'opmerking 3'
+    assert legacy_manifest['issues'][1]['title'] == 'opmerking 04'
+    assert [v['id'] for v in legacy_manifest['issues']] == [v['id'] for v in manifest['issues']]
+    assert ns['_normalize_remark_number']('3.0', 'RemarkNumber[0]') == '3'
+
     # An existing user image must remain present alongside the automatic screenshot.
     photo_doc = fitz.open()
     photo_page = photo_doc.new_page(width=160, height=100)
@@ -77,6 +88,10 @@ with tempfile.TemporaryDirectory() as d:
                                          logs, regions, 0.30)
     output_pdf = fitz.open(final_path)
     assert output_pdf.page_count == 6
+    # Visible numbers use the external IDs rather than 1, 2, 3.
+    assert 'Opmerking 3' in output_pdf[3].get_text()
+    assert 'Opmerking 41' in output_pdf[4].get_text()
+    assert 'Opmerking 102' in output_pdf[5].get_text()
     assert len(output_pdf.embfile_names()) == 6  # Source + manifest + 3 screenshots + user image
     embedded_manifest = json.loads(output_pdf.embfile_get('planpin-manifest.json'))
     assert embedded_manifest == manifest
@@ -166,3 +181,5 @@ else:
     raise AssertionError('Open remark outlines should still be rejected')
 
 print('PASS: rotated/irregular remark outlines accepted; PDF boundaries remain strict')
+
+print('PASS: external remark numbers survive manifests and appear on PDF issue pages')
