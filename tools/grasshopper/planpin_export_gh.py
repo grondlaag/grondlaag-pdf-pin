@@ -187,7 +187,7 @@ def _snapshot_clip(page, region, margin):
 
 def _snapshot_preview_bytes(page, clip, target_width=1200):
     """Compressed PNG of plan excerpt; also becomes a PlanPin image attachment."""
-    zoom = min(8.0, float(target_width) / clip.width)
+    zoom = min(8.0, float(target_width) / clip.width, 1600.0 / clip.height)
     pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=clip,
                              colorspace=fitz.csRGB, alpha=False)
     return pixmap.tobytes('png')
