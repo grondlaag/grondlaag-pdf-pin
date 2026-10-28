@@ -1,11 +1,11 @@
 #! python 3
 # requirements: pymupdf
 """
-GRONDLAAG / PlanPin exporter - Rhino 8 / Grasshopper Python 3 (v0.1)
+GRONDLAAG / PlanPin exporter - Rhino 8 / Grasshopper Python 3 (v0.2)
 
 Inputs (rename component inputs EXACTLY as below):
     PdfBoundaries     Curve    List     required; axis-aligned closed XY rectangles
-    RemarkRectangles Curve    List     required; axis-aligned closed XY rectangles
+    RemarkRectangles Curve    List     required; closed planar XY outlines (rotation allowed)
     Title            Text     List     optional; index-aligned with remarks
     Comment          Text     List     optional; index-aligned with remarks
     Category         Text     List     optional; index-aligned with remarks
@@ -109,7 +109,12 @@ def _choice(values, index, default, field, n, allowed, aliases):
     return normalized
 
 
-def _get_box(curve, label, tolerance):
+def _get_box(curve, label, tolerance, require_axis_aligned=True):
+    """Return an XY bounding box. Only PDF boundaries must be rectangular.
+
+    Closed remark curves may be rotated or slightly irregular: PlanPin uses
+    their bounding-box centre as a single marker position.
+    """
     if curve is None or not hasattr(curve, 'GetBoundingBox'):
         raise ValueError('{} must be a closed rectangular Curve'.format(label))
     if not curve.IsClosed:
@@ -120,11 +125,13 @@ def _get_box(curve, label, tolerance):
         raise ValueError('{} has zero width or height'.format(label))
     if bb.Max.Z - bb.Min.Z > tolerance:
         raise ValueError('{} must lie on the XY plane'.format(label))
-    # Rectangles rotated in XY cannot be accurately exported as axis-aligned windows.
-    perimeter = float(curve.GetLength())
-    expected = 2.0 * (dx + dy)
-    if abs(perimeter - expected) > max(tolerance * 10.0, expected * 0.002):
-        raise ValueError('{} must be an axis-aligned rectangle'.format(label))
+    # Only PDF page windows require axis-aligned rectangular outlines.
+    # A remark is a point marker in PlanPin, so its outline need not be rectangular.
+    if require_axis_aligned:
+        perimeter = float(curve.GetLength())
+        expected = 2.0 * (dx + dy)
+        if abs(perimeter - expected) > max(tolerance * 10.0, expected * 0.002):
+            raise ValueError('{} must be an axis-aligned rectangle'.format(label))
     return (float(bb.Min.X), float(bb.Min.Y), float(bb.Max.X), float(bb.Max.Y))
 
 
@@ -422,7 +429,8 @@ def main(inputs):
     tolerance = max(float(doc.ModelAbsoluteTolerance), 1.0e-7)
     pages = [_get_box(c, 'PdfBoundaries[{}]'.format(j), tolerance)
              for j, c in enumerate(page_curves)]
-    remarks = [_get_box(c, 'RemarkRectangles[{}]'.format(i), tolerance)
+    remarks = [_get_box(c, 'RemarkRectangles[{}]'.format(i), tolerance,
+                        require_axis_aligned=False)
                for i, c in enumerate(remark_curves)]
     inputs['tolerance'] = tolerance
     inputs['FileName'] = inputs['FileName'] or 'planpin-grasshopper.pdf'
