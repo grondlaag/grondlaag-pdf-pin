@@ -466,7 +466,9 @@ def main(inputs):
 
 # Grasshopper component's global input/output bindings.
 # Store the last successful result; only the first True after False triggers export.
-_key = 'grondlaag-planpin-gh-export:' + str(ghenv.Component.InstanceGuid)
+_component = globals().get('ghenv')
+_component_id = str(_component.Component.InstanceGuid) if _component is not None else 'standalone'
+_key = 'grondlaag-planpin-gh-export:' + _component_id
 _pressed = bool(Export)
 _previous = bool(sc.sticky.get(_key + ':pressed', False))
 sc.sticky[_key + ':pressed'] = _pressed
@@ -484,6 +486,7 @@ if _pressed and not _previous:
         sc.sticky[_key + ':last'] = (PdfPath, RemarkMap, Manifest, Log)
     except Exception as exc:
         Log = 'EXPORT FAILED: {}'.format(exc)
-        ghenv.Component.AddRuntimeMessage(gh.Kernel.GH_RuntimeMessageLevel.Error, Log)
+        if _component is not None:
+            _component.Component.AddRuntimeMessage(gh.Kernel.GH_RuntimeMessageLevel.Error, Log)
 elif _pressed:
     Log = 'Export input is still True. Release and press again.\n' + Log
