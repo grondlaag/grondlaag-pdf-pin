@@ -97,6 +97,7 @@ export function createPlanPinManifest({
 			x: marker.x,
 			y: marker.y,
 			title: marker.title,
+			...(marker.remarkNumber ? { remarkNumber: marker.remarkNumber } : {}),
 			comment: marker.comment,
 			category: marker.category,
 			status: marker.status,
@@ -144,6 +145,7 @@ function isManifestIssue(value: unknown): value is PlanPinManifestIssue {
 		typeof candidate.x === 'number' &&
 		typeof candidate.y === 'number' &&
 		typeof candidate.title === 'string' &&
+		(candidate.remarkNumber === undefined || typeof candidate.remarkNumber === 'string') &&
 		typeof candidate.comment === 'string' &&
 		typeof candidate.category === 'string' &&
 		typeof candidate.status === 'string' &&
@@ -371,6 +373,7 @@ export async function restoreMarkersFromManifest(
 		x: issue.x,
 		y: issue.y,
 		title: issue.title,
+		remarkNumber: issue.remarkNumber,
 		comment: issue.comment,
 		category: issue.category,
 		status: issue.status,
