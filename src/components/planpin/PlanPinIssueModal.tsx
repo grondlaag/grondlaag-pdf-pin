@@ -8,6 +8,7 @@ import {
 	type FormEvent,
 } from 'react';
 import { createMarkerImages, revokeMarkerImages } from './markers';
+import PlanPinIssueTable from './PlanPinIssueTable';
 import {
 	getIssueCategoryLabel,
 	getIssuePriorityLabel,
@@ -241,6 +242,11 @@ export default function PlanPinIssueModal({
 							/>
 						</label>
 					</div>
+
+					<PlanPinIssueTable
+						table={draftValue.table}
+						onChange={(table) => setDraftValue((current) => ({ ...current, table }))}
+					/>
 
 					<label
 						className={`planpin-modal__dropzone${isDraggingFiles ? ' is-dragging' : ''}`}
