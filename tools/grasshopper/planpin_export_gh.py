@@ -1,7 +1,7 @@
 #! python 3
 # requirements: pymupdf
 """
-GRONDLAAG / PlanPin exporter - Rhino 8 / Grasshopper Python 3 (v0.4)
+GRONDLAAG / PlanPin exporter - Rhino 8 / Grasshopper Python 3 (v0.5)
 
 Inputs (rename component inputs EXACTLY as below):
     PdfBoundaries     Curve    List     required; axis-aligned closed XY rectangles
@@ -15,6 +15,9 @@ Inputs (rename component inputs EXACTLY as below):
     Reference        Text     List     optional; index-aligned with remarks
     Images           Text     Tree     optional; branch {i} = image paths for remark i
     RemarkIds        Text     List     optional; persistent UUID per remark
+    TableColumns     Text     List     optional; column headings, shared by tables
+    TableData        Generic  Tree     optional; branch {remark_index;row_index}=column values
+    TableTotals      Text     List     optional; columns to total (by heading)
     OutputFolder     Text     Item     required
     FileName         Text     Item     optional; defaults to planpin-grasshopper.pdf
     Scale            Number   Item     optional; default 100 (means 1:100)
@@ -39,6 +42,7 @@ Notes:
 """
 
 import datetime
+from decimal import Decimal, InvalidOperation
 import json
 import math
 import mimetypes
@@ -272,6 +276,196 @@ def _collect_image_info(tree, i, marker_id):
     return images, contents
 
 
+def _parse_table_data(tree, columns, totals, remark_count):
+    """One optional table per remark, with rows at {remark-index;row-index}."""
+    headings = [str(x).strip() for x in _as_list(columns)]
+    requested = [str(x).strip() for x in _as_list(totals) if str(x).strip()]
+    if not headings:
+        if tree is not None and getattr(tree, 'Paths', None) and len(tree.Paths):
+            raise ValueError('TableData is connected but TableColumns is empty')
+        if requested:
+            raise ValueError('TableTotals requires TableColumns')
+        return {}
+    if any(not x for x in headings):
+        raise ValueError('TableColumns cannot contain blank headers')
+    if len(set(h.casefold() for h in headings)) != len(headings):
+        raise ValueError('TableColumns names must be unique (case-insensitive)')
+    if len(headings) > 16:
+        raise ValueError('TableColumns supports at most 16 columns on PDF pages')
+    lookup = {h.casefold(): h for h in headings}
+    resolved = []
+    for name in requested:
+        key = name.casefold()
+        if key not in lookup:
+            raise ValueError('TableTotals contains unknown column {!r}'.format(name))
+        if lookup[key] not in resolved:
+            resolved.append(lookup[key])
+    if tree is None:
+        return {}
+    ordered = {}
+    for path in tree.Paths:
+        indices = list(path.Indices)
+        if len(indices) != 2:
+            raise ValueError('TableData path {} must be {{remark index;row index}}'.format(path))
+        i, row_index = (int(indices[0]), int(indices[1]))
+        if not 0 <= i < remark_count or row_index < 0:
+            raise ValueError('TableData path {} has invalid remark or row index'.format(path))
+        values = [str(v) if v is not None else '' for v in tree.Branch(path)]
+        if not values:
+            continue  # empty placeholder branches are allowed
+        if len(values) != len(headings):
+            raise ValueError('TableData path {} has {} cells, expected {} from TableColumns'.format(
+                path, len(values), len(headings)))
+        if row_index in ordered.setdefault(i, {}):
+            raise ValueError('Duplicate TableData row {} for remark {}'.format(row_index, i))
+        ordered[i][row_index] = values
+    return {
+        i: {'columns': headings[:], 'rows': [r for _, r in sorted(rows.items())],
+            'totals': resolved[:]}
+        for i, rows in ordered.items() if rows
+    }
+
+
+def _decimal_value(value):
+    """Parse local numbers such as '1.234,56', '-2 191,32', '1234.56'."""
+    raw = str(value).strip().replace('\u2212', '-').replace('\u00a0', '').replace(' ', '')
+    raw = raw.replace('€', '').replace('EUR', '').replace('eur', '')
+    if not raw or raw in ('-', '–', '—'):
+        return None
+    if raw.startswith('(') and raw.endswith(')'):
+        raw = '-' + raw[1:-1]
+    if '%' in raw:
+        return None
+    if ',' in raw and '.' in raw:
+        raw = raw.replace('.', '').replace(',', '.') if raw.rfind(',') > raw.rfind('.') else raw.replace(',', '')
+    elif ',' in raw:
+        raw = raw.replace(',', '.')
+    elif raw.count('.') > 1:
+        raw = raw.replace('.', '')
+    try:
+        value = Decimal(raw)
+        return value if value.is_finite() else None
+    except InvalidOperation:
+        return None
+
+
+def _table_total_values(table):
+    results = {}
+    for heading in table['totals']:
+        j = table['columns'].index(heading)
+        values = [_decimal_value(row[j]) for row in table['rows']]
+        numeric = [n for n in values if n is not None]
+        if not numeric:
+            results[heading] = '—'
+            continue
+        decimals = max(2, min(4, max(max(0, -v.as_tuple().exponent) for v in numeric)))
+        total = sum(numeric, Decimal(0))
+        formatted = '{:,.{}f}'.format(total, decimals)
+        results[heading] = formatted.replace(',', '_').replace('.', ',').replace('_', '.')
+    return results
+
+
+def _table_column_widths(table, width=516):
+    headings = table['columns']
+    rows = table['rows']
+    weights = []
+    for i, name in enumerate(headings):
+        longest = max([len(name)] + [len(row[i]) for row in rows[:100]])
+        numeric = sum(_decimal_value(row[i]) is not None for row in rows[:30])
+        numeric = bool(rows) and numeric >= max(1, int(len(rows[:30]) * 0.6))
+        weight = max(7, min(45, longest if not numeric else max(8, len(name))))
+        weights.append(weight)
+    total = sum(weights)
+    return [width * weight / total for weight in weights]
+
+
+def _draw_issue_table(pdf, issue, first_page_index, initial_y, messages):
+    """Place the issue's table after comment; overflow goes to continuation PDF pages."""
+    table = issue.get('table')
+    if not table or not table['rows']:
+        return 0
+    columns, rows = table['columns'], table['rows']
+    widths = _table_column_widths(table)
+    left, right = 48., 564.
+    top_limit, bottom = 125., 721.
+    page = pdf[first_page_index]
+    current = initial_y
+    row_index = 0
+    continuation_count = 0
+    footer_rows = _table_total_values(table)
+    has_footer = bool(table['totals'])
+
+    def start_page(p, y, is_continuation):
+        header_y = max(top_limit, y)
+        title = 'Tabel bij opmerking {}{}'.format(
+            issue.get('remarkNumber') or issue['issueNumber'], ' (vervolg)' if is_continuation else '')
+        p.insert_text((left, header_y), title, fontsize=11, fontname='hebo')
+        y = header_y + 13
+        p.draw_rect(fitz.Rect(left, y, right, y + 27), fill=(.92, .93, .95),
+                    color=(.75, .77, .8), width=.4)
+        x = left
+        for j, heading in enumerate(columns):
+            p.insert_textbox(fitz.Rect(x + 2, y + 2, x + widths[j] - 2, y + 26),
+                             heading, fontsize=6.8, fontname='hebo', color=(.18,.2,.23))
+            x += widths[j]
+        return y + 27
+
+    def row_height(values):
+        lines = [max(1, math.ceil(len(str(v)) / max(4, int((w - 6) / 4.1))))
+                 for w, v in zip(widths, values)]
+        return max(18, max(lines) * 9.2 + 7)
+
+    def row_draw(p, y, values, shaded=False, bold=False):
+        height = row_height(values)
+        p.draw_rect(fitz.Rect(left, y, right, y + height),
+                    fill=(.97, .975, .98) if shaded else (1., 1., 1.),
+                    color=(.78, .8, .82), width=.35)
+        x = left
+        for j, cell in enumerate(values):
+            p.insert_textbox(fitz.Rect(x + 2, y + 3, x + widths[j] - 2, y + height - 1),
+                             str(cell), fontsize=7.4, fontname='hebo' if bold else 'helv',
+                             color=(.17, .2, .22), lineheight=1.1)
+            x += widths[j]
+        return y + height
+
+    while row_index < len(rows) or has_footer:
+        # first issue page has reserved space for its plan fragment and comment
+        if current + 55 > bottom:
+            page = pdf.new_page(width=612, height=792)
+            continuation_count += 1
+            current = 63
+            page.insert_text((48, 46), 'Opmerking {} - tabel (vervolg)'.format(
+                issue.get('remarkNumber') or issue['issueNumber']), fontsize=16, fontname='hebo')
+            page.insert_text((48, 748), 'Terug naar planpagina {}'.format(issue['pageNumber']), fontsize=10)
+            page.insert_link({'kind': fitz.LINK_GOTO,
+                              'from': fitz.Rect(48, 735, 310, 759),
+                              'page': issue['pageNumber'] - 1, 'to': fitz.Point(0, 0)})
+        current = start_page(page, current, continuation_count > 0)
+        while row_index < len(rows):
+            vals = rows[row_index]
+            h = row_height(vals)
+            if h > bottom - top_limit - 40:
+                raise ValueError('Table row {} on remark {} too long for one PDF page'.format(
+                    row_index, issue.get('remarkNumber') or issue['issueNumber']))
+            if current + h > bottom:
+                break
+            current = row_draw(page, current, vals, row_index % 2 == 1)
+            row_index += 1
+        if row_index == len(rows) and has_footer:
+            footer = [footer_rows.get(h, 'Totaal' if j == 0 else '') for j, h in enumerate(columns)]
+            height = row_height(footer)
+            if current + height <= bottom:
+                current = row_draw(page, current, footer, True, True)
+                has_footer = False
+        if row_index == len(rows) and not has_footer:
+            break
+        current = bottom + 1 # reserve next loop for continuation
+    messages.append('Table on remark {}: {} rows, {} total columns, {} continuation pages'.format(
+        issue.get('remarkNumber') or issue['issueNumber'], len(rows), len(table['totals']), continuation_count))
+    return continuation_count
+
+
+
 def _get_top_view(doc):
     view = doc.Views.Find('Top', False)
     if view is None:
@@ -373,6 +567,7 @@ def _render_final_pdf(source_file, output_file, manifest, image_contents, messag
             _append_text(overview, 760, 'Overige {} opmerkingen: zie de volgende detailpagina\'s'.format(n - 27), 9)
 
         attachments = list(image_contents)
+        table_jobs = []
         for i, issue in enumerate(manifest['issues']):
             page = pdf[plan_pages + 1 + i]
             page.insert_text((48, 52), 'Opmerking {}'.format(_display_number(issue, i)), fontsize=20, fontname='hebo')
@@ -411,13 +606,27 @@ def _render_final_pdf(source_file, output_file, manifest, image_contents, messag
                     _draw_snapshot(page, source_doc, issue['pageNumber'] - 1,
                                    selected, clip, fitz.Rect(48, 202, 564, 462))
                     page.insert_text((48, 489), 'Commentaar', fontsize=12, fontname='hebo')
-                    page.insert_textbox(fitz.Rect(48, 506, 564, 722), issue['comment'],
+                    page.insert_textbox(fitz.Rect(48, 506, 564, 540 if issue.get('table') and issue['table']['rows'] and len(issue['comment']) <= 230 else 722), issue['comment'],
                                         fontsize=10, fontname='helv', lineheight=1.3)
             else:
                 # Optional legacy path for tests/callers without snapshot geometry.
                 page.insert_text((48, 198), 'Commentaar', fontsize=12, fontname='hebo')
                 page.insert_textbox(fitz.Rect(48, 214, 564, 475), issue['comment'],
                                     fontsize=10, fontname='helv', lineheight=1.3)
+
+            # Tables render after the comment. Images retain their earlier layout:
+            # such issues receive a dedicated continuation page for their table.
+            if issue.get('table') and issue['table']['rows']:
+                if user_images:
+                    table_start = 730 # continuation page (image previews reach y=710)
+                elif snapshot_regions is None:
+                    table_start = 496
+                elif len(issue['comment']) > 230:
+                    table_start = 730 # long comments keep the original text area
+                else:
+                    # Reserve room for the table under the comment box.
+                    table_start = 563
+                table_jobs.append((issue, plan_pages + 1 + i, table_start))
 
             # User-attached images remain independent of the auto-generated snapshot.
             if user_images:
@@ -438,6 +647,11 @@ def _render_final_pdf(source_file, output_file, manifest, image_contents, messag
                               'from': fitz.Rect(48, 735, 390, 761),
                               'page': issue['pageNumber'] - 1,
                               'to': fitz.Point(0, 0)})
+
+        # Extra table pages are appended after all original issue pages so the
+        # manifest's issuePageNumber and all plan markers remain stable.
+        for table_issue, first_idx, y in table_jobs:
+            _draw_issue_table(pdf, table_issue, first_idx, y, messages)
 
         # Markers and links on plan pages refer to the exact existing issue pages.
         for i, issue in enumerate(manifest['issues']):
@@ -491,6 +705,8 @@ def build_manifest_and_assignments(page_boxes, remark_boxes, params):
 
     now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
     issues, all_image_contents = [], []
+    tables = _parse_table_data(params.get('TableData'), params.get('TableColumns'),
+                               params.get('TableTotals'), n)
     for i, rect in enumerate(remark_boxes):
         matches = [j for j, boundary in enumerate(page_boxes) if _contains(boundary, rect, params['tolerance'])]
         if len(matches) != 1:
@@ -527,6 +743,7 @@ def build_manifest_and_assignments(page_boxes, remark_boxes, params):
         images, contents = _collect_image_info(params['Images'], i, issue_id)
         all_image_contents.extend(contents)
         issues.append(dict(
+            **({'table': tables[i]} if i in tables else {}),
             id=issue_id, pageNumber=page_index + 1, x=round(x, 9), y=round(y, 9),
             title=title, comment=comment,
             category=category, status=status, priority=priority,
@@ -600,7 +817,7 @@ def main(inputs):
             verified = json.loads(check.embfile_get('planpin-manifest.json').decode('utf-8'))
             if verified != manifest:
                 raise RuntimeError('Embedded PlanPin manifest failed round-trip validation')
-            if check.page_count != len(pages) + 1 + len(remarks):
+            if check.page_count < len(pages) + 1 + len(remarks):
                 raise RuntimeError('Final PDF page count is inconsistent')
         finally:
             check.close()
@@ -636,7 +853,8 @@ if _pressed and not _previous:
         _inputs = {name: globals().get(name) for name in (
             'PdfBoundaries', 'RemarkRectangles', 'Title', 'RemarkNumber', 'Comment',
             'Category', 'Status', 'Priority', 'Reference', 'Images',
-            'RemarkIds', 'OutputFolder', 'FileName', 'Scale', 'Dpi',
+            'RemarkIds', 'TableColumns', 'TableData', 'TableTotals',
+            'OutputFolder', 'FileName', 'Scale', 'Dpi',
             'SnapshotMargin')}
         PdfPath, RemarkMap, Manifest, Log = main(_inputs)
         sc.sticky[_key + ':last'] = (PdfPath, RemarkMap, Manifest, Log)
