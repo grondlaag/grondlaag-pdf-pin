@@ -98,6 +98,7 @@ export function createPlanPinManifest({
 			y: marker.y,
 			title: marker.title,
 			...(marker.remarkNumber ? { remarkNumber: marker.remarkNumber } : {}),
+			...(marker.table ? { table: marker.table } : {}),
 			comment: marker.comment,
 			category: marker.category,
 			status: marker.status,
@@ -132,6 +133,21 @@ function isManifestImage(value: unknown): value is PlanPinManifestImage {
 	);
 }
 
+function isIssueTable(value: unknown): boolean {
+	if (!value || typeof value !== 'object') return false;
+	const candidate = value as Record<string, unknown>;
+	if (!Array.isArray(candidate.columns) || !candidate.columns.every((c) => typeof c === 'string')) return false;
+	if (!Array.isArray(candidate.rows) || !candidate.rows.every((row) =>
+		Array.isArray(row) &&
+		row.length === (candidate.columns as string[]).length &&
+		row.every((v) => typeof v === 'string')
+	)) return false;
+	if (!Array.isArray(candidate.totals) || !candidate.totals.every((c) =>
+		typeof c === 'string' && (candidate.columns as string[]).includes(c)
+	)) return false;
+	return true;
+}
+
 function isManifestIssue(value: unknown): value is PlanPinManifestIssue {
 	if (!value || typeof value !== 'object') {
 		return false;
@@ -146,6 +162,7 @@ function isManifestIssue(value: unknown): value is PlanPinManifestIssue {
 		typeof candidate.y === 'number' &&
 		typeof candidate.title === 'string' &&
 		(candidate.remarkNumber === undefined || typeof candidate.remarkNumber === 'string') &&
+		(candidate.table === undefined || isIssueTable(candidate.table)) &&
 		typeof candidate.comment === 'string' &&
 		typeof candidate.category === 'string' &&
 		typeof candidate.status === 'string' &&
@@ -374,6 +391,7 @@ export async function restoreMarkersFromManifest(
 		y: issue.y,
 		title: issue.title,
 		remarkNumber: issue.remarkNumber,
+		table: issue.table,
 		comment: issue.comment,
 		category: issue.category,
 		status: issue.status,
