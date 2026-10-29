@@ -39,7 +39,14 @@ export interface IssueMarkerImage {
 	source: 'upload' | 'manifest';
 }
 
+export interface IssueTable {
+	columns: string[];
+	rows: string[][];
+	totals: string[];
+}
+
 export interface IssueMarker {
+	table?: IssueTable;
 	id: string;
 	pageNumber: number;
 	x: number;
@@ -57,6 +64,7 @@ export interface IssueMarker {
 }
 
 export interface IssueMarkerDraft {
+	table?: IssueTable;
 	id: string;
 	pageNumber: number;
 	x: number;
@@ -96,6 +104,7 @@ export interface PlanPinManifestImage {
 }
 
 export interface PlanPinManifestIssue {
+	table?: IssueTable;
 	id: string;
 	pageNumber: number;
 	x: number;
@@ -140,6 +149,7 @@ export interface StoredIssueMarkerImage {
 }
 
 export interface StoredIssueMarker {
+	table?: IssueTable;
 	id: string;
 	pageNumber: number;
 	x: number;
