@@ -22,6 +22,7 @@ import {
 	getIssueStatusLabel,
 } from './labels';
 import { getMarkerDisplayNumber, getMarkerDisplayTitle, getMarkerIssueNumber } from './markers';
+import { tableTotals } from './table-utils';
 import type { IssueCategory, IssueMarker, IssueMarkerImage, IssueStatus } from './types';
 
 interface ExportPlanPinPdfOptions {
@@ -639,6 +640,145 @@ async function drawIssuePage({
 	});
 }
 
+function drawIssueTablePages({
+	pdfDocument,
+	marker,
+	issuePage,
+	planPage,
+	exportNumber,
+	font,
+	boldFont,
+	exportedAt,
+}: {
+	pdfDocument: PDFDocument;
+	marker: IssueMarker;
+	issuePage: PDFPage;
+	planPage: PDFPage;
+	exportNumber: number;
+	font: PDFFont;
+	boldFont: PDFFont;
+	exportedAt: string;
+}): void {
+	const table = marker.table;
+	if (!table || table.columns.length === 0 || table.rows.length === 0) return;
+	const margin = 48;
+	const pageWidth = 612;
+	const availableWidth = pageWidth - margin * 2;
+	const totals = tableTotals(table);
+	const weights = table.columns.map((col, i) => {
+		const values = table.rows.slice(0, 80).map((row) => row[i] ?? '');
+		const maxLength = Math.max(col.length, ...values.map((value) => value.length));
+		const mostlyNumeric = values.length > 0 &&
+			values.filter((value) => /^[\s€+\-\d.,]+$/.test(value)).length >= values.length * 0.6;
+		return Math.max(7, Math.min(mostlyNumeric ? 14 : 42, Math.max(col.length, maxLength)));
+	});
+	const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+	const widths = weights.map((w) => w / totalWeight * availableWidth);
+	let page: PDFPage | null = null;
+	let y = 0;
+	let rowIndex = 0;
+	let footerPending = table.totals.length > 0;
+	let firstTablePage: PDFPage | null = null;
+	const ink = rgb(0.18, 0.18, 0.18);
+	const rule = rgb(0.8, 0.81, 0.82);
+
+	function cellLines(value: string, width: number): string[] {
+		const normalized = value.replace(/[\u2028\u2029]/g, ' ').replace(/\r/g, '');
+		const raw = wrapText({ text: normalized, font, fontSize: 7.4, maxWidth: Math.max(8, width - 6) });
+		const results: string[] = [];
+		for (const line of raw) {
+			if (font.widthOfTextAtSize(line, 7.4) <= width - 6) {
+				results.push(line);
+			} else {
+				// Break long unsplittable words to fit narrow Grasshopper columns.
+				let fragment = '';
+				for (const char of line) {
+					if (fragment && font.widthOfTextAtSize(fragment + char, 7.4) > width - 6) {
+						results.push(fragment);
+						fragment = char;
+					} else fragment += char;
+				}
+				if (fragment) results.push(fragment);
+			}
+		}
+		return results;
+	}
+	function getCellLines(values: string[]): string[][] {
+		return values.map((value, i) => cellLines(value, widths[i]));
+	}
+	function rowHeight(lines: string[][]): number {
+		return Math.max(20, 9 + Math.max(...lines.map((value) => value.length)) * 10);
+	}
+	function drawRow(values: string[], bold = false, shaded = false) {
+		if (!page) return;
+		const lines = getCellLines(values);
+		const height = rowHeight(lines);
+		page.drawRectangle({
+			x: margin, y: y - height, width: availableWidth, height,
+			color: shaded ? rgb(0.96, 0.965, 0.97) : rgb(1, 1, 1),
+			borderColor: rule, borderWidth: 0.35,
+		});
+		let x = margin;
+		for (let i = 0; i < values.length; i++) {
+			for (let j = 0; j < lines[i].length; j++) {
+				page.drawText(lines[i][j], {
+					x: x + 3, y: y - 11 - j * 10, font: bold ? boldFont : font,
+					size: 7.4, color: ink,
+				});
+			}
+			x += widths[i];
+		}
+		y -= height;
+	}
+	function newTablePage() {
+		page = pdfDocument.addPage([612, 792]);
+		if (!firstTablePage) firstTablePage = page;
+		page.drawText(`Opmerking ${getMarkerDisplayNumber(marker, exportNumber)} - tabel`, {
+			x: margin, y: 741, size: 18, font: boldFont, color: ink,
+		});
+		y = 709;
+		const headingLines = getCellLines(table!.columns);
+		const headingHeight = Math.max(26, rowHeight(headingLines));
+		page.drawRectangle({ x: margin, y: y - headingHeight, width: availableWidth,
+			height: headingHeight, color: rgb(0.92, 0.93, 0.94), borderColor: rule, borderWidth: .5 });
+		let x = margin;
+		for (let i = 0; i < table!.columns.length; i++) {
+			for (let j = 0; j < headingLines[i].length; j++) {
+				page.drawText(headingLines[i][j], {
+					x: x + 3, y: y - 12 - j * 10, font: boldFont, size: 7.4, color: ink,
+				});
+			}
+			x += widths[i];
+		}
+		y -= headingHeight;
+		const returnText = `Terug naar planpagina ${marker.pageNumber}`;
+		page.drawText(returnText, { x: margin, y: 51, size: 10, font, color: ink });
+		addInternalLinkAnnotation({
+			page, targetPage: planPage, x: margin, y: 47, width: 210, height: 15,
+		});
+		drawExportBranding({ page, font, boldFont, exportedAt });
+	}
+	newTablePage();
+	while (rowIndex < table.rows.length || footerPending) {
+		const values = rowIndex < table.rows.length ? table.rows[rowIndex] : table.columns.map((col, j) =>
+			Object.prototype.hasOwnProperty.call(totals, col) ? totals[col] : j === 0 ? 'Totaal' : '');
+		const height = rowHeight(getCellLines(values));
+		if (height > 575) {
+			throw new Error(`Tabelrij ${rowIndex + 1} van opmerking ${getMarkerDisplayNumber(marker, exportNumber)} is te hoog voor een PDF-pagina.`);
+		}
+		if (y - height < 79) newTablePage();
+		drawRow(values, rowIndex >= table.rows.length, rowIndex % 2 === 1);
+		if (rowIndex < table.rows.length) rowIndex += 1;
+		else footerPending = false;
+	}
+	if (firstTablePage) {
+		const linkText = `Tabel met ${table.rows.length} rijen bekijken`;
+		issuePage.drawText(linkText, { x: margin, y: 58, size: 10, font: boldFont, color: rgb(0.45, 0.35, 0.16) });
+		addInternalLinkAnnotation({ page: issuePage, targetPage: firstTablePage,
+			x: margin, y: 54, width: 290, height: 16 });
+	}
+}
+
 function drawPlanMarker({
 	page,
 	marker,
@@ -750,6 +890,19 @@ export async function exportPlanPinPdf({
 			marker,
 			target,
 		});
+	}
+
+	// Table pages are appended after original issue pages so issuePageNumber links
+	// and the embedded PlanPin manifest remain backwards-compatible.
+	for (const marker of markers) {
+		const target = markerTargets.get(marker.id);
+		const planPage = planPages[marker.pageNumber - 1];
+		if (target && planPage && marker.table) {
+			drawIssueTablePages({
+				pdfDocument, marker, issuePage: target.issuePage, planPage,
+				exportNumber: target.exportNumber, font, boldFont, exportedAt,
+			});
+		}
 	}
 
 	for (const marker of markers) {
