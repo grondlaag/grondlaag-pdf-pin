@@ -36,6 +36,7 @@ export function createIssueMarker({
 		x: point.x,
 		y: point.y,
 		title: `opmerking ${issueNumber}`,
+		table: undefined,
 		comment: '',
 		category: 'other',
 		status: 'open',
@@ -67,6 +68,7 @@ export function createDraftFromMarker(marker: IssueMarker): IssueMarkerDraft {
 	return {
 		...marker,
 		images: [...marker.images],
+		table: marker.table ? { columns: [...marker.table.columns], rows: marker.table.rows.map((row) => [...row]), totals: [...marker.table.totals] } : undefined,
 		mode: 'edit',
 	};
 }
@@ -79,6 +81,7 @@ export function createMarkerFromDraft(draft: IssueMarkerDraft): IssueMarker {
 		y: draft.y,
 		title: draft.title.trim() || 'opmerking zonder titel',
 		remarkNumber: draft.remarkNumber?.trim() || undefined,
+		table: draft.table ? { columns: [...draft.table.columns], rows: draft.table.rows.map((row) => [...row]), totals: [...draft.table.totals] } : undefined,
 		comment: draft.comment.trim(),
 		category: draft.category,
 		status: draft.status,
