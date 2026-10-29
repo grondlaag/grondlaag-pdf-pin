@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import PlanPinIssueTable from './PlanPinIssueTable';
 import {
 	getIssueCategoryLabel,
 	getIssuePriorityLabel,
@@ -228,6 +229,7 @@ export default function PlanPinIssueList({
 									)}
 								</div>
 							</button>
+							{isSelected && marker.table ? <PlanPinIssueTable table={marker.table} /> : null}
 							<div className="planpin-app__issue-actions">
 								<button
 									type="button"
