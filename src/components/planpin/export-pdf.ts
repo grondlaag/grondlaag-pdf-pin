@@ -548,6 +548,13 @@ async function drawIssuePage({
 	}
 
 	currentY -= 8;
+	if (marker.table && marker.table.rows.length > 0) {
+		issuePage.drawText(
+			`Tabel: ${marker.table.rows.length} rijen, ${marker.table.columns.length} kolommen (zie tabelbijlage)`,
+			{ x: margin, y: currentY, size: 10, font: boldFont, color: mutedColor },
+		);
+		currentY -= 20;
+	}
 	const embeddedImages: EmbeddedIssueImage[] = [];
 	const skippedImages: IssueMarkerImage[] = [];
 
