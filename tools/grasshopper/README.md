@@ -1,118 +1,55 @@
-# Grondlaag / PlanPin Grasshopper PDF exporter (prototype v0.4)
+# PlanPin Grasshopper exporter v0.5 — dynamische tabellen
 
-Een Python 3-script voor **Rhino 8 + Grasshopper** dat meerdere Rhino-XY-rechthoeken omzet naar pagina's van **één PDF** en opmerkingen met **PlanPin-manifest v1** insluit. Gegevens blijven bewerkbaar via de huidige PlanPin-webapplicatie na het openen van de PDF.
+Deze versie bouwt voort op v0.4 en ondersteunt een **optionele tabel per opmerking**. De kolommen worden niet hardcoded: je kunt met Bumblebee de Excel-gegevens rechtstreeks als Grasshopper DataTree aanbieden.
 
-## Setup
+## Drie nieuwe Grasshopper-inputs
 
-1. Open Rhino 8 en Grasshopper. Maak een **Python 3 Script**-component.
-2. Voeg inputs toe en hernoem ze exact zoals in de tabel (hoofdletters zijn relevant). Zet de access-modus correct. Alle geometrie-inputs: **Type hint `Curve`**. Voor `Images`: **Tree Access**.
-3. Open de Python-editor, vervang de code door de inhoud van `planpin_export_gh.py`.
-4. Rhino installeert `pymupdf` via de `# requirements:`-regel indien nodig. Gebruik deze code **niet** in de oude IronPython 2-component.
-5. Zorg voor een **parallel Top-vlak**, waarbij +Y omhoog staat. Het script gebruikt een bestaande Top-view; als die er niet is, de actieve view.
-6. De geplande tekening moet **baked/zichtbaar in Rhino** en afdrukbaar zijn. Alleen Grasshopper-preview-objecten geven niet noodzakelijk een Rhino PDF-print. Bewaar de boundary- en opmerkingrechthoeken als hulpgeometrie op een niet-afdrukbare of verborgen laag.
-7. Verbind een Grasshopper **Button** met `Export`. Elke puls levert precies één export op.
+| Input | Type | Access | Betekenis |
+|---|---|---|---|
+| `TableColumns` | Text | **List** | Kolomkoppen, dezelfde volgorde als in elke data-branch. |
+| `TableData` | Generic | **Tree** | Elke branch bevat **één rij**: `{opmerkingIndex;rijIndex}`. |
+| `TableTotals` | Text | **List** | Kolomnamen (exacte naam; hoofdletterongevoelig) waarvoor een totaal wordt getoond. |
 
-## Inputs
+### Voorbeeld
 
-| Naam | GH Type | Access | Verplicht | Toelichting |
-|---|---|---|---|---|
-| `PdfBoundaries` | Curve | List | Ja | Gesloten, XY, niet-geroteerde rechthoeken; **lijstvolgorde = PDF-paginavolgorde** |
-| `RemarkRectangles` | Curve | List | Ja | Gesloten vlakke XY-curve; rotatie en kleine vormafwijkingen zijn toegestaan; kan leeg zijn |
-| `Title` | Text | List | Nee | Beschrijvende titel. Een uitsluitend numerieke titel wordt automatisch als opmerkingsnummer herkend. |
-| `RemarkNumber` | Text / Integer | List | Nee | **Zichtbaar nummer** (bv. `3`, `03`, `41`). Indien leeg blijft de bestaande automatische volgnummering werken. |
-| `Comment` | Text | List | Nee | Beschrijving per opmerking |
-| `Category` | Text | List | Nee | `design`, `technical`, `site`, `coordination`, `safety`, `other` of Nederlandse labels |
-| `Status` | Text | List | Nee | `open`, `in progress`, `resolved` of Nederlandse labels |
-| `Priority` | Text | List | Nee | `low`, `medium`, `high` of Nederlandse labels |
-| `Reference` | Text | List | Nee | Ruimte / as / notitiereferentie |
-| `Images` | Text | Tree | Nee | Bestandspaden naar afbeelding; tak `{i}` hoort bij opmerking met index `i` |
-| `RemarkIds` | Text | List | Nee | Bestaande UUID's om identiteit te behouden bij sorteren |
-| `OutputFolder` | Text | Item | Ja | **Bestaande** outputmap op de lokale schijf |
-| `FileName` | Text | Item | Nee | Standaard `planpin-grasshopper.pdf` |
-| `Scale` | Number | Item | Nee | 100 betekent 1:100; standaard 100 |
-| `Dpi` | Integer | Item | Nee | Standaard 150 (vector output waar mogelijk) |
-| `SnapshotMargin` | Number | Item | Nee | Extra marge rond de opmerkingsrechthoek, als fractie van de breedte/hoogte; standaard `0.30` (30%), bereik `0..3` |
-| `Export` | Boolean | Item | Ja | Button |
+`TableColumns = [artikelwijziging, a, b, i, hv, eenheidsprijs, prijsimpact]`
 
-**Metadata-lijsten:** ofwel volledig niet aangesloten, ofwel exact even lang als `RemarkRectangles`, in overeenkomende volgorde.
+`TableTotals = [hv, prijsimpact]`
 
-### Zichtbaar nummer versus technische ID (v0.4)
+```
+TableData
+{28;0} -> [51.11.20.ARCH. | wand, 4,87, 2,95, -1, -14,37, 152,53, -2191,32]
+{28;1} -> [53.25.ARCH. | tapijttegels, 0,15, 4,87, 1, 0,73, 45,49, 33,23]
+{28;2} -> [...]
+{49;0} -> [...]  # opmerking 50 heeft ook een eigen tabel
+```
 
-- `RemarkNumber` = zichtbaar nummer op de opmerkingenpagina, in de overzichtslijst en op de marker. **Dit is niet de UUID**.
-- `Title` = omschrijving zoals `wand verwijderen metselwerk`, onafhankelijk van het nummer.
-- `RemarkIds` = optionele **technische UUID** die identiteitsverlies voorkomt wanneer de Grasshopper-lijst opnieuw gesorteerd wordt.
-- `issueNumber` in het PlanPin-manifest blijft het oorspronkelijke **1-based volgnummer** van de lijst; het optionele veld `remarkNumber` bewaart de ingestelde, zichtbare nummering. `issuePageNumber` blijft het echte paginanummer in de uiteindelijke PDF.
-- Voor bestaande Grasshopper-definities waarin `Title = 3` staat, neemt de exporter deze waarde automatisch over als zichtbaar opmerkingsnummer, zonder dat je direct een extra input moet verbinden. Bij voorkeur voortaan `RemarkNumber = 3`, `Title = wand verwijderen metselwerk` gebruiken.
-- `RemarkNumber` accepteert **1 tot 8 cijfers** en behoudt leidende nullen (`03`). Grasshopper-nummers zoals `3.0` worden `3`.
-- De bijbehorende PlanPin-webapp is ook aangepast op branch `feature/grasshopper-planpin-numbering-v04`, zodat dit optionele veld bij import, bewerking en herexport intact blijft. **De live webpagina moet die branch eerst deployen**; in de oude versie zal de zichtbare nummering na herexport alsnog automatisch opnieuw worden bepaald.
+**De eerste index is altijd nul-gebaseerd**, dus branch `{28;0}` hoort bij `RemarkRectangles[28]`, niet bij zichtbaar opmerkingsnummer 28. De tweede index sorteert de rijen oplopend. Lege of ontbrekende branches leveren geen tabel op. Kolomnamen kunnen gedeeld worden door alle opmerkingen, maar slechts de opmerkingen die gegevens hebben krijgen effectief een tabel.
 
+De exporter controleert dat elke rij hetzelfde aantal items bevat als `TableColumns`, dat kolomnamen uniek zijn en dat elke naam in `TableTotals` bestaat. Het maximum is voorlopig 16 kolommen, om de PDF leesbaar te houden. Alle celwaarden worden als tekst bewaard; de berekening gebeurt enkel voor de geselecteerde kolommen. Getallen met Nederlandse decimaalnotatie, bijvoorbeeld `-2.191,32`, worden ondersteund. De originele celwaarden wijzigen niet door de totalenberekening.
 
-## Outputs
+## PDF en PlanPin-webapp
 
-| Naam | Type | Omschrijving |
-|---|---|---|
-| `PdfPath` | Text | Laatst geslaagde PDF-bestand |
-| `RemarkMap` | DataTree[int] | Tak `{0}` bevat alle opmerkingindices op pagina 1, tak `{1}` die op pagina 2, enz. Ook lege takken worden aangehouden. |
-| `Manifest` | Text | JSON-voorvertoning van het ingebedde PlanPin-manifest |
-| `Log` | Text | Status of foutmeldingen |
+- Tabellen verschijnen bij de opmerking, na de tekst of op een vervolgpagina als er onvoldoende ruimte is. De kolomkoppen herhalen bij vervolgpagina's.
+- Het embedded `planpin-manifest.json` behoudt `version: 1`. Een opmerking met data krijgt optioneel `table: {columns: string[], rows: string[][], totals: string[]}`.
+- De volledige tabellen blijven beschikbaar in de PlanPin-webapp. De webapp kan ze bekijken en via het opmerkingenformulier aanpassen, met rijen, kolommen en optionele totalen.
+- Het `TableTotals`-veld bevat de **namen** van de kolommen, niet de indexen. Een alternatieve naam of andere volgorde vraagt dus geen wijziging van Python-code.
+- Het numerieke totaal is een **berekend resultaat**, geen apart hardcoded veld.
 
-## Exact PlanPin-formaat
+## Bestaande inputs
 
-De uiteindelijke PDF heeft:
-- Planpagina's in de volgorde van `PdfBoundaries`;
-- een samenvattingspagina met overzicht;
-- een detailpagina per opmerking, inclusief een **planfragment uit de originele planpagina** met rood stippelkader;
-- klikbare markers op planpagina's;
-- ingesloten **`planpin-manifest.json`** met `kind: planpin-manifest`, `version: 1`, PlanPin `issues` en `sessions`;
-- ingesloten **`planpin-source.pdf`**: de originele planpagina's zonder ingevoegde markers;
-- optionele ingesloten beelden via `planpin-images/{id}-{name}`;
-- voor **iedere opmerking** een automatisch gegenereerde, ingebedde PNG van het planfragment, die PlanPin als gewone afbeelding kan bewerken, bewaren en opnieuw exporteren.
+Alle eerdere v0.4-inputs en hun gedrag blijven behouden: `PdfBoundaries`, `RemarkRectangles`, `Title`, `RemarkNumber`, `Comment`, `Category`, `Status`, `Priority`, `Reference`, `Images`, `RemarkIds`, `OutputFolder`, `FileName`, `Scale`, `Dpi`, `SnapshotMargin`, `Export`.
 
-PlanPin leest de `planpin-manifest.json`-bijlage, laadt `planpin-source.pdf` in zijn viewer en zet de markers via de genormaliseerde `x/y` terug op de juiste pagina. Hiermee kunnen titel, commentaar, categorie, status, prioriteit en referentie op de webpagina bewerkt worden.
+De vorige outputs blijven `PdfPath`, `RemarkMap`, `Manifest`, `Log`. Export start uitsluitend op de flank van de `Export`-button.
 
-**Let op:** de huidige PlanPin-software bewaart enkel de *positie* (middelpunt van de Rhino-opmerkingrechthoek), **niet** de afmetingen van de rechthoek. De uitsnede en het rode kader worden bij de Grasshopper-export bepaald uit de **XY-bounding box** van de oorspronkelijke curve. Voor gedraaide/onregelmatige curves is dat dus het omhullende kader, niet hun exacte contour.
+## Testen
 
-### Automatische planfragmenten (v0.3)
+`python test_tables.py` test een DataTree met tabellen voor meerdere opmerkingen, Europese getallen, totaalberekening, ingebedde manifestmetadata, PDF-paginering en vervolgpagina's zonder Rhino. De volledige Rhino-vectorprint en GH DataTree-binding kunnen enkel in Rhino 8 worden gevalideerd.
 
-- Een geselecteerde opmerkingszone verschijnt op de bijbehorende opmerkingenpagina als **vectoriële PDF-uitsnede** met het rode selectiekader. De uitsnede komt uit de originele, niet-gemarkeerde plan-PDF (geen Rhino screenshot nodig).
-- `SnapshotMargin = 0` toont zo dicht mogelijk de selectie; `0.30` toont 30% extra rondom; `1.0` voegt 100% extra toe. Er blijft minstens 1% van de paginabreedte/-hoogte aan context, waar mogelijk. De uitsnede wordt altijd begrensd door de PDF-pagina.
-- PlanPin-manifest v1 blijft exact hetzelfde schema. De snapshot wordt automatisch toegevoegd als **eerste afbeelding** van de opmerking (`planpin-images/…planfragment-opmerking-NNN.png`). Zo blijft deze ook bij bewerken en exporteren via de website behouden.
-- Reeds bestaande `Images`-input blijft ondersteund. Bij opmerkingen mét eigen afbeeldingen staan commentaar en planfragment naast elkaar; bestaande afbeeldingen komen onderaan.
-- Bij tientallen of honderden opmerkingen kan de PDF groter worden: per opmerking wordt een PNG-voorbeeld van maximaal ongeveer 1200 px breed gerenderd (bij uitzonderlijk kleine zones is er een zoomlimiet).
-- Wanneer je een opmerking later *verplaatst* in PlanPin, blijft de oorspronkelijke snapshot een afbeelding van de eerdere planzone. Die wordt pas vernieuwd bij een nieuwe Grasshopper-export; de huidige webapp bewaart immers geen rechthoekgeometrie.
+## Grenzen
 
-
-## Grenzen van prototype v0.4
-
-- Geen live cloud-synchronisatie. Bewerkingen in PlanPin worden meegenomen bij de **webexport** naar een nieuwe PDF; een nieuwe Grasshopper-export zal die webwijzigingen niet automatisch terug in Rhino opnemen.
-- `RemarkIds` is nodig als de **lijstvolgorde** wijzigt; zonder deze input worden UUID's deterministisch van outputbestandslocatie en lijstindex afgeleid.
-- PDF-print volgt de afdrukbare Rhino-geometrie van de Top-viewport. Materiaal-/weergavestijlen en fonts eerst in Rhino controleren.
-- `PdfBoundaries` moeten vlakke, niet-geroteerde XY-rechthoeken blijven. Opmerkingcontouren mogen geroteerd of onregelmatig zijn; hun XY-bounding-box-middelpunt bepaalt de markerpositie. De PDF's kunnen per pagina verschillende afmetingen hebben.
-- Aangemaakte PDF's kunnen bestaande bestanden overschrijven na een nieuwe button-puls. Bij een fout blijft de bestaande PDF behouden.
-- Het script is in deze omgeving alleen **zonder Rhino** getest: manifest, paginatoewijzing, PDF-pagina's, PDF-bijlagen en links. Er is nog een lokale Rhino 8-test nodig op de vector-print en GH-componentintegratie.
-
-## Tests
-
-`python test_export_core.py` voert een pure Python/PyMuPDF-test uit met 2 planpagina's en 3 opmerkingen en controleert het PDF-manifest, ingesloten snapshots, vectorfragmenten, linkannotaties en foutcondities. Deze test draait buiten Rhino.
-
-## Wijziging v0.2
-
-- `RemarkRectangles` accepteert voortaan geroteerde of licht onregelmatige **gesloten, vlakke** curves. De markerpositie is het middelpunt van de XY bounding box.
-- De strikte vormcontrole blijft behouden voor `PdfBoundaries`, omdat die de exacte PDF-pagina-uitsnede bepalen.
-- Als een opmerking buiten een pagina valt of meerdere pagina's raakt, blijft de export bewust stoppen met een foutmelding.
-
-## Wijziging v0.3
-
-- Automatisch planfragment op elke opmerkingenpagina, zonder extra verplichte Grasshopper-input.
-- Extra optionele `SnapshotMargin` input (standaard `0.30`).
-- Vectorafbeelding van het gekozen planfragment plus PNG-bijlage die PlanPin bij herexport bewaart.
-- Unieke/stabiele snapshot-identificaties per opmerking (geen dubbele afbeeldingen bij herexport).
-- Dynamische paginaopmaak: bij eigen afbeeldingen blijven commentaar, planfragment en bijlagen zichtbaar.
-
-## Wijziging v0.4
-
-- `RemarkNumber` (optioneel) als onafhankelijk zichtbaar nummer naast `Title` en `RemarkIds`.
-- Numerieke `Title`-waarden worden compatibiliteitshalve automatisch geïnterpreteerd als `RemarkNumber` indien er geen afzonderlijk nummer is opgegeven.
-- De PDF-overzichtspagina, opmerkingenpagina en marker gebruiken hetzelfde zichtbare nummer.
-- Optioneel `remarkNumber` in het bestaande PlanPin manifest v1; de technische `id` en het lijstvolgnummer `issueNumber` blijven ongewijzigd.
-- De bijbehorende website-aanpassing bewaart dit veld in de browserconcepten en biedt een bewerkbaar veld **nummer**.
+- Eén tabel per opmerking; niet meerdere losse tabellen onder dezelfde opmerking.
+- De drie tabelinputs zijn globaal voor één exporter: elke opmerking gebruikt hetzelfde kolommenschema bij de GH-export. In de webapp kan iedere opmerking nadien zijn eigen kolommen krijgen.
+- De export van een Grasshopper-project overschrijft geen webwijzigingen *in place*: PlanPin bewaart wijzigingen bij de volgende webexport naar PDF. Om wijzigingen naar Grasshopper terug te brengen is een latere import nodig.
+- Voor zeer lange celwaarden kan een rij te hoog worden voor één pagina; het script meldt dan een fout in plaats van gegevens stilzwijgend te schrappen.
+- Bij opmerkingen met eigen afbeeldingen wordt de tabel wegens ruimtegebrek op een vervolgpagina geplaatst. Het overzicht en alle oorspronkelijke opmerkinglinks blijven geldig.
