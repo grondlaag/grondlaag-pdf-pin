@@ -1038,3 +1038,90 @@ main {
 		margin: var(--ds-space-sm);
 	}
 }
+
+
+/* PlanPin issue tables: responsive viewer + in-place editor */
+.planpin-table {
+	min-width: 0;
+	display: grid;
+	gap: 0.65rem;
+	padding: 0.8rem;
+	border: 1px solid var(--app-border);
+	border-radius: var(--app-radius-sm);
+	background: var(--app-panel-soft);
+}
+.planpin-table__heading {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.5rem;
+	font-size: 0.8rem;
+}
+.planpin-table__heading span, .planpin-table__hint {
+	color: var(--app-muted);
+	font-size: 0.75rem;
+}
+.planpin-table__scroll {
+	min-width: 0;
+	max-width: 100%;
+	overflow-x: auto;
+}
+.planpin-table__grid {
+	width: 100%;
+	min-width: max-content;
+	border-collapse: collapse;
+	font-size: 0.75rem;
+	text-align: left;
+}
+.planpin-table__grid th, .planpin-table__grid td {
+	min-width: 5.5rem;
+	padding: 0.4rem 0.5rem;
+	border-bottom: 1px solid var(--app-border);
+	vertical-align: top;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.planpin-table__grid th {
+	background: var(--app-paper);
+	font-weight: 650;
+}
+.planpin-table__grid tbody tr:nth-child(even) { background: var(--app-paper); }
+.planpin-table__grid tfoot { background: var(--app-accent-soft); }
+.planpin-table__grid input[type="text"], .planpin-table__grid input:not([type]) {
+	width: 100%;
+	min-width: 5.5rem;
+	padding: 0.4rem;
+	border: 1px solid var(--app-border);
+	border-radius: 0.25rem;
+	background: var(--app-paper);
+	color: var(--app-text);
+	font: inherit;
+}
+.planpin-table__header-control {
+	display: flex;
+	gap: 0.25rem;
+	align-items: center;
+}
+.planpin-table__icon-button {
+	cursor: pointer;
+	border: 0;
+	border-radius: 0.2rem;
+	background: transparent;
+	color: var(--app-muted);
+	font-size: 1.2rem;
+}
+.planpin-table__icon-button:hover { color: var(--app-text); }
+.planpin-table__editor { display: grid; gap: 0.65rem; }
+.planpin-table__actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.planpin-table__totals {
+	display: flex;
+	gap: 0.4rem 0.8rem;
+	flex-wrap: wrap;
+	border: 1px solid var(--app-border);
+	border-radius: var(--app-radius-sm);
+	padding: 0.5rem 0.65rem;
+}
+.planpin-table__totals legend { color: var(--app-muted); font-size: 0.75rem; }
+.planpin-table__totals label { display: flex; gap: 0.3rem; align-items: center; font-size: 0.78rem; }
+.planpin-table__empty { padding: 0.5rem 0; }
+.planpin-modal__card:has(.planpin-table) { width: min(100%, 62rem); }
